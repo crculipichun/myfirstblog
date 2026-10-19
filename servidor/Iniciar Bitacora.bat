@@ -5,10 +5,10 @@ cd /d "%~dp0"
 set "PY=python"
 where py >nul 2>nul
 if %errorlevel%==0 set "PY=py"
-%PY% -c "import openpyxl" >nul 2>nul
+%PY% -c "import openpyxl, pyngrok" >nul 2>nul
 if not %errorlevel%==0 (
-  echo Instalando openpyxl por unica vez...
-  %PY% -m pip install --user openpyxl
+  echo Instalando lo necesario por unica vez...
+  %PY% -m pip install --user openpyxl pyngrok
 )
 %PY% servidor.py %*
 pause

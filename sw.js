@@ -1,5 +1,5 @@
 // Guarda la app en el teléfono para que funcione sin señal (faenas, rutas, talleres).
-const CACHE = "bitacora-flota-v1";
+const CACHE = "bitacora-flota-v2";
 const ARCHIVOS = [
   "./",
   "index.html",
@@ -20,7 +20,7 @@ self.addEventListener("activate", e => {
 
 // Red primero para la app (para recibir actualizaciones), caché si no hay señal.
 self.addEventListener("fetch", e => {
-  if (e.request.method !== "GET") return;
+  if (e.request.method !== "GET" || new URL(e.request.url).pathname.includes("/api/")) return;
   e.respondWith(
     fetch(e.request)
       .then(res => {

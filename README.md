@@ -17,25 +17,38 @@ La pantalla de inicio avisa qué requiere atención: aceite vencido o por vencer
 
 ## La planilla Excel en el computador (recomendado)
 
-El computador de la oficina o taller guarda la planilla `Bitacora_Flota.xlsx`, y cada registro hecho en un celular se agrega solo.
+El computador de la oficina o taller guarda la planilla `Bitacora_Flota.xlsx`. **Cualquier celular, desde cualquier lugar con internet**, envía sus registros y se agregan solos a esa planilla.
 
 **Instalar (una vez):**
 1. Instala Python desde https://www.python.org/downloads/ (en Windows marca **"Add python.exe to PATH"**).
 2. Descarga este repositorio en el computador (botón verde *Code → Download ZIP* en GitHub) y descomprímelo.
+3. **Conexión por internet (gratis, con ngrok):**
+   1. Crea una cuenta en https://dashboard.ngrok.com/signup
+   2. Copia tu *Authtoken* en https://dashboard.ngrok.com/get-started/your-authtoken
+   3. Crea tu dominio fijo gratuito en https://dashboard.ngrok.com/domains (botón *New Domain*). Queda algo como `mi-flota.ngrok-free.app`.
+   4. En la carpeta `servidor`, haz doble clic en **`Configurar internet.bat`**, pega el Authtoken y el dominio. Se guardan para siempre.
 
 **Usar cada día:**
-1. Abre la carpeta `servidor` y haz doble clic en **`Iniciar Bitacora.bat`** (en Mac/Linux: `./iniciar.sh`). La primera vez instala lo necesario.
-   Si Windows pregunta por el Firewall, permite el acceso en **redes privadas**.
-2. La ventana muestra la dirección para los celulares, por ejemplo `http://192.168.1.23:8080`. Ábrela en el celular, conectado al **mismo Wi-Fi** que el computador, y agrégala a la pantalla de inicio.
-3. La ventana también muestra el **PIN de administrador**. En el celular del administrador: pestaña **Planilla → Administrador**, escribe el PIN y toca *Entrar*. Para cambiarlo: `servidor.py --pin 1234`.
-4. Deja la ventana abierta. La planilla queda en `Documentos\Bitacora Flota\Bitacora_Flota.xlsx`.
+1. En la carpeta `servidor`, haz doble clic en **`Iniciar Bitacora.bat`** (en Mac/Linux: `./iniciar.sh`). Si Windows pregunta por el Firewall, permite el acceso.
+2. La ventana muestra:
+   - el **link para los celulares**, por ejemplo `https://mi-flota.ngrok-free.app/?c=K7PQ3M`. Envíalo por WhatsApp a todos los que van a registrar;
+   - el **código de acceso** (`K7PQ3M`), que va incluido en el link;
+   - el **PIN de administrador**, solo para quien agrega y edita camiones.
+3. Deja la ventana abierta mientras se trabaje. La planilla queda en `Documentos\Bitacora Flota\Bitacora_Flota.xlsx`.
    Para usar otra carpeta (por ejemplo una de OneDrive): `servidor.py --carpeta "C:\ruta\a\la\carpeta"`.
 
+**En cada celular:**
+- **Android con el APK:** abre la app → **Planilla → Conexión con el computador**, pega el link y toca *Conectar*.
+- **Cualquier celular (Android o iPhone) sin APK:** abre el link en Chrome o Safari. La primera vez ngrok muestra un aviso: toca *Visit Site*. Luego agrégala a la pantalla de inicio (Chrome: menú ⋮ → *Instalar aplicación*; Safari: Compartir → *Agregar a inicio*).
+- **Administrador:** **Planilla → Administrador**, escribe el PIN y toca *Entrar*. Para cambiar el PIN: `servidor.py --pin 1234`. Para cambiar el código de acceso: `servidor.py --codigo NUEVO` (los celulares tendrán que ingresar el nuevo).
+
 **Bueno saber:**
-- **Sin señal o fuera del Wi-Fi:** los registros quedan guardados en el celular y se envían solos al volver a la red del computador. Arriba se ve el estado: *"PC · planilla al día"* o *"Sin PC · 3 por enviar"*. Deja la app abierta en el celular cuando salgas a terreno; sin conexión al computador no se puede volver a cargar.
-- **Si tienes el Excel abierto**, Windows no deja modificarlo. La app avisa *"cierra el Excel"* y la planilla se actualiza sola en cuanto lo cierres.
-- La planilla se **vuelve a generar** con cada registro. Para corregir datos usa la app; los cambios hechos a mano en el Excel se pierden. Para hacer tus propios cálculos, usa otra hoja o archivo que lea de esta planilla.
+- **El computador debe estar encendido** con el programa abierto para recibir datos. Si está apagado o un celular no tiene señal, los registros quedan guardados en el celular y se envían solos cuando se puede. Arriba se ve el estado: *"PC · planilla al día"* o *"Sin PC · 3 por enviar"*.
+- Solo los celulares con el **código de acceso** pueden enviar o ver datos. Si alguien deja la empresa, cambia el código.
+- **Si tienes el Excel abierto**, Windows no deja modificarlo. La app avisa *"cierra el Excel"* y la planilla se actualiza sola en cuanto lo cierres. Para evitarlo, trabaja en tu propio Excel conectado con Power Query (ver más abajo).
+- La planilla se **vuelve a generar** con cada registro. Para corregir datos usa la app; los cambios hechos a mano en el Excel se pierden.
 - Los datos originales quedan en `datos_bitacora.json`, en la misma carpeta. Respalda esa carpeta.
+- Sin ngrok el programa funciona igual, pero solo para celulares en el mismo Wi-Fi que el computador (link `http://192.168…`).
 
 ### Hojas de la planilla
 
@@ -53,8 +66,8 @@ El computador de la oficina o taller guarda la planilla `Bitacora_Flota.xlsx`, y
 ## App Android (APK)
 
 1. Copia `Bitacora-Flota.apk` al celular y ábrelo. Android pedirá permitir *instalar apps de origen desconocido* para el administrador de archivos o el navegador: acéptalo.
-2. Abre **Bitácora Flota**, ve a **Planilla → Computador con la planilla**, escribe la dirección que muestra la ventana del computador (por ejemplo `192.168.1.23:8080`) y toca *Conectar*.
-3. La app funciona sin internet: los registros quedan en el celular y se envían solos al volver al Wi-Fi del computador.
+2. Abre **Bitácora Flota**, ve a **Planilla → Conexión con el computador**, pega el link que muestra la ventana del computador y toca *Conectar*.
+3. La app funciona sin señal: los registros quedan en el celular y se envían solos cuando vuelve la conexión.
 
 Para volver a generar el APK (Linux o macOS, con Java 17+, Python 3 y npm): `android/construir-apk.sh`. Guarda el archivo `android/firma-bitacora.p12`: para instalar una versión nueva encima de la anterior, sin perder datos, el APK tiene que firmarse con la misma llave.
 
@@ -81,4 +94,5 @@ También se puede publicar con GitHub Pages (*Settings → Pages → Deploy from
 - `manifest.webmanifest`, `icon.svg`, `icon-*.png` – instalación como app
 - `servidor/servidor.py` – programa del computador: entrega la app a los celulares y escribe la planilla Excel
 - `servidor/Iniciar Bitacora.bat`, `servidor/iniciar.sh` – accesos para iniciarlo
+- `servidor/Configurar internet.bat` – guarda el Authtoken y el dominio de ngrok
 - `android/` – app Android (abre la misma página) y `construir-apk.sh` para generar el APK

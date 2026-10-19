@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Bitácora de Flota: servidor para el computador de la oficina o taller.
 
-Los celulares abren la app desde este computador (misma red Wi-Fi) y cada
-registro se guarda aquí, en una planilla Excel que se actualiza sola.
+Los celulares envían cada registro a este computador, que lo guarda en una
+planilla Excel que se actualiza sola. Con ngrok (gratis) los celulares pueden
+enviar desde cualquier lugar con internet, no solo desde el Wi-Fi de la oficina.
 
-Uso:  python servidor.py [--carpeta RUTA] [--puerto 8080]
+Uso:  python servidor.py [--carpeta RUTA] [--puerto 8080] [--pin 1234]
+                         [--ngrok-token TOKEN --dominio mi-flota.ngrok-free.app]
 """
 import argparse
 import datetime as dt
@@ -79,17 +81,26 @@ class Estado:
             self.datos["camiones"] = {c["id"]: {**c, "creado": ahora} for c in flota_inicial()}
             self.aplicar([])
 
-    def pin(self, nuevo=None):
-        if nuevo:
-            self.config["pin_admin"] = str(nuevo)
+    def configurar(self, **cambios):
+        """Guarda la configuración; genera el PIN de administrador y el código de acceso la primera vez."""
+        self.config.update({k: str(v).strip() for k, v in cambios.items() if v})
         if not self.config.get("pin_admin"):
             self.config["pin_admin"] = f"{secrets.randbelow(10**6):06d}"
+        if not self.config.get("codigo_acceso"):
+            letras = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # sin 0/O ni 1/I para que no se confundan
+            self.config["codigo_acceso"] = "".join(secrets.choice(letras) for _ in range(6))
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(self.config, f, ensure_ascii=False, indent=1)
-        return self.config["pin_admin"]
+
+    @staticmethod
+    def _igual(dado, esperado):
+        return isinstance(dado, str) and bool(esperado) and secrets.compare_digest(dado.strip().upper(), esperado.upper())
 
     def es_admin(self, pin):
-        return isinstance(pin, str) and secrets.compare_digest(pin.strip(), self.config.get("pin_admin", ""))
+        return self._igual(pin, self.config.get("pin_admin", ""))
+
+    def codigo_ok(self, codigo):
+        return self._igual(codigo, self.config.get("codigo_acceso", ""))
 
     def lista(self):
         return {col: list(self.datos[col].values()) for col in COLECCIONES}
@@ -325,11 +336,24 @@ def hacer_handler(estado: Estado):
             self.end_headers()
             self.wfile.write(cuerpo)
 
+        def autorizado(self):
+            """Las consultas de datos exigen el código de acceso de la empresa (cabecera X-Codigo)."""
+            if estado.codigo_ok(self.headers.get("X-Codigo")):
+                return True
+            time.sleep(1)  # frena a quien prueba códigos al azar
+            self.responder(401, {"error": "codigo", "mensaje": "Código de acceso incorrecto"})
+            return False
+
         def do_GET(self):
             ruta = self.path.split("?")[0]
             if ruta == "/api/estado":
-                return self.responder(200, estado.info())
+                # Sin código solo confirma que aquí está la app; con código entrega el estado de la planilla
+                if estado.codigo_ok(self.headers.get("X-Codigo")):
+                    return self.responder(200, {**estado.info(), "codigoOk": True})
+                return self.responder(200, {"app": "bitacora-flota", "codigoOk": False})
             if ruta == "/api/datos":
+                if not self.autorizado():
+                    return
                 with estado.lock:
                     return self.responder(200, {"datos": estado.lista(), "planilla": estado.info()})
             if ruta not in ARCHIVOS_APP:
@@ -347,7 +371,7 @@ def hacer_handler(estado: Estado):
         def do_OPTIONS(self):
             self.send_response(204)
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Codigo, ngrok-skip-browser-warning")
             self.send_header("Access-Control-Allow-Private-Network", "true")
             self.send_header("Access-Control-Max-Age", "86400")
             self.end_headers()
@@ -372,6 +396,8 @@ def hacer_handler(estado: Estado):
                     raise ValueError
             except ValueError:
                 return self.responder(400, {"error": "formato inválido"})
+            if not self.autorizado():
+                return
             admin = estado.es_admin(cuerpo.get("pin"))
             if ruta == "/api/admin":
                 if not admin:
@@ -398,6 +424,25 @@ def ip_local():
         s.close()
 
 
+def abrir_ngrok(estado: Estado, puerto):
+    """Publica el servidor en internet con la dirección fija de ngrok. Devuelve la URL o None."""
+    token, dominio = estado.config.get("ngrok_token"), estado.config.get("ngrok_dominio")
+    if not token:
+        return None
+    try:
+        from pyngrok import conf, ngrok
+    except ImportError:
+        print(" Falta pyngrok para conectarse por internet. Instálalo con:  python -m pip install pyngrok")
+        return None
+    try:
+        conf.get_default().auth_token = token
+        opciones = {"domain": dominio} if dominio else {}
+        return ngrok.connect(puerto, "http", **opciones).public_url
+    except Exception as e:  # noqa: BLE001
+        print(f" No se pudo abrir la conexión por internet (ngrok): {e}")
+        return None
+
+
 def reintentar(estado: Estado):
     while True:
         time.sleep(15)
@@ -411,22 +456,35 @@ def main():
     ap.add_argument("--carpeta", default=str(Path.home() / "Documents" / "Bitacora Flota"), help="Carpeta donde se guarda la planilla Excel")
     ap.add_argument("--puerto", type=int, default=8080)
     ap.add_argument("--pin", help="Cambia el PIN de administrador")
+    ap.add_argument("--codigo", help="Cambia el código de acceso que usan los celulares")
+    ap.add_argument("--ngrok-token", help="Authtoken de tu cuenta ngrok (se guarda, basta darlo una vez)")
+    ap.add_argument("--dominio", help="Dominio fijo gratuito de ngrok, por ejemplo mi-flota.ngrok-free.app")
     args = ap.parse_args()
     carpeta = Path(args.carpeta).expanduser()
     carpeta.mkdir(parents=True, exist_ok=True)
     estado = Estado(carpeta)
-    pin = estado.pin(args.pin)
+    estado.configurar(pin_admin=args.pin, codigo_acceso=args.codigo, ngrok_token=args.ngrok_token, ngrok_dominio=args.dominio)
+    cfg = estado.config
     with estado.lock:
         estado.escribir_excel()
     threading.Thread(target=reintentar, args=(estado,), daemon=True).start()
     srv = ThreadingHTTPServer(("0.0.0.0", args.puerto), hacer_handler(estado))
-    print("=" * 62)
+    publica = abrir_ngrok(estado, args.puerto)
+    print("=" * 66)
     print(" BITÁCORA DE FLOTA · servidor del computador")
     print(f" Planilla Excel:  {estado.xlsx}")
-    print(f" En el celular (misma red Wi-Fi) abre:  http://{ip_local()}:{args.puerto}")
-    print(f" PIN de administrador (agrega y edita camiones):  {pin}")
+    if publica:
+        print(f" Dirección por internet (cualquier celular, cualquier lugar):")
+        print(f"     {publica}")
+        print(f" Link para enviar a los celulares (incluye el código):")
+        print(f"     {publica}/?c={cfg['codigo_acceso']}")
+    else:
+        print(" Solo red local. Para recibir datos desde cualquier lugar, configura ngrok (ver README).")
+    print(f" En la misma red Wi-Fi:  http://{ip_local()}:{args.puerto}/?c={cfg['codigo_acceso']}")
+    print(f" Código de acceso para los celulares:  {cfg['codigo_acceso']}")
+    print(f" PIN de administrador (agrega y edita camiones):  {cfg['pin_admin']}")
     print(" Deja esta ventana abierta. Para detener: Ctrl+C")
-    print("=" * 62)
+    print("=" * 66)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
