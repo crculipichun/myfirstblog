@@ -10,6 +10,8 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
+import secrets
 import socket
 import sys
 import threading
@@ -60,20 +62,47 @@ class Estado:
         self.pendiente = False
         self.ultima = None
         self.error = ""
+        self.config_path = carpeta / "config_bitacora.json"
+        self.config = {}
+        if self.config_path.exists():
+            with open(self.config_path, encoding="utf-8") as f:
+                self.config = json.load(f)
         self.datos = {"camiones": {}, "registros": {}}
         if self.json.exists():
             with open(self.json, encoding="utf-8") as f:
                 d = json.load(f)
             for col in COLECCIONES:
                 self.datos[col] = {x["id"]: x for x in d.get(col, []) if isinstance(x, dict) and x.get("id")}
+        else:
+            # Primera vez: carga la flota de la empresa definida en index.html
+            ahora = int(time.time() * 1000)
+            self.datos["camiones"] = {c["id"]: {**c, "creado": ahora} for c in flota_inicial()}
+            self.aplicar([])
+
+    def pin(self, nuevo=None):
+        if nuevo:
+            self.config["pin_admin"] = str(nuevo)
+        if not self.config.get("pin_admin"):
+            self.config["pin_admin"] = f"{secrets.randbelow(10**6):06d}"
+        with open(self.config_path, "w", encoding="utf-8") as f:
+            json.dump(self.config, f, ensure_ascii=False, indent=1)
+        return self.config["pin_admin"]
+
+    def es_admin(self, pin):
+        return isinstance(pin, str) and secrets.compare_digest(pin.strip(), self.config.get("pin_admin", ""))
 
     def lista(self):
         return {col: list(self.datos[col].values()) for col in COLECCIONES}
 
-    def aplicar(self, cambios):
+    def aplicar(self, cambios, admin=False):
+        """Aplica los cambios. Solo el administrador puede tocar camiones; devuelve cuántos se rechazaron."""
+        rechazados = 0
         for c in cambios:
             col, op = c.get("col"), c.get("op")
             if col not in COLECCIONES:
+                continue
+            if col == "camiones" and not admin:
+                rechazados += 1
                 continue
             if op == "set" and isinstance(c.get("doc"), dict) and isinstance(c["doc"].get("id"), str):
                 self.datos[col][c["doc"]["id"]] = c["doc"]
@@ -83,6 +112,7 @@ class Estado:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(self.lista(), f, ensure_ascii=False, indent=1)
         os.replace(tmp, self.json)
+        return rechazados
 
     def escribir_excel(self):
         tmp = self.carpeta / "~Bitacora_Flota_nueva.xlsx"
@@ -111,6 +141,26 @@ class Estado:
 
 
 # ---------- Cálculos (los mismos que muestra la app) ----------
+def flota_inicial():
+    try:
+        html = (APP_DIR / "index.html").read_text(encoding="utf-8")
+        m = re.search(r"/\*FLOTA_INICIAL\*/(.*?)/\*FIN_FLOTA\*/", html, re.S)
+        return json.loads(m.group(1)) if m else []
+    except (OSError, ValueError):
+        return []
+
+
+def km_de(c, regs):
+    """Odómetro vigente: la lectura más alta entre la ficha y los registros del camión."""
+    vals = [v for v in [c.get("km")] + [r.get("km") for r in regs if r.get("camionId") == c["id"]] if isinstance(v, (int, float))]
+    return max(vals) if vals else None
+
+
+def horo_de(c, regs):
+    vals = [v for v in [c.get("horometro")] + [r.get("horometro") for r in regs if r.get("camionId") == c["id"]] if isinstance(v, (int, float))]
+    return max(vals) if vals else None
+
+
 def fecha(s):
     try:
         return dt.date.fromisoformat(s) if s else None
@@ -167,7 +217,7 @@ def construir_excel(d):
         u = de(c["id"], "aceite")
         if not u or u.get("proximoKm") is None:
             return u, None, "Sin registro"
-        rest = u["proximoKm"] - (c.get("km") or 0)
+        rest = u["proximoKm"] - (km_de(c, regs) or 0)
         return u, rest, "Vencido" if rest <= 0 else "Por vencer" if rest <= 1500 else "Al día"
 
     def doc_vencido(c):
@@ -214,11 +264,17 @@ def construir_excel(d):
                     cell.number_format = '"$"#,##0' if "Costo" in h else "#,##0"
 
     filas = []
-    for c in sorted(camiones.values(), key=lambda c: patente(c.get("patente"))):
+    def interno(c):
+        try:
+            return (0, int(c.get("interno")), patente(c.get("patente")))
+        except (TypeError, ValueError):
+            return (1, 0, patente(c.get("patente")))
+
+    for c in sorted(camiones.values(), key=interno):
         u, rest, est_ac = aceite(c)
         au = de(c["id"], "auditoria")
         filas.append([patente(c.get("patente")), c.get("interno"), c.get("tipoCamion"), c.get("marca"), c.get("modelo"), c.get("anio"),
-                      c.get("color"), c.get("vin"), c.get("motor"), c.get("km"), c.get("horometro"), c.get("conductor"), c.get("faena"),
+                      c.get("color"), c.get("vin"), c.get("motor"), km_de(c, regs), horo_de(c, regs), c.get("conductor"), c.get("faena"),
                       c.get("intervalo"), fecha(u.get("fecha")) if u else None, u.get("km") if u else None, u.get("proximoKm") if u else None,
                       rest, est_ac, len(abiertas(c["id"])), fecha(au.get("fecha")) if au else None, puntaje(au.get("checklist"))["pct"] if au else None,
                       *[fecha(c.get(k)) for k, _ in DOCS], c.get("estanque"), c.get("neumaticos"), estado(c), c.get("notas")])
@@ -284,25 +340,49 @@ def hacer_handler(estado: Estado):
         def end_headers(self):
             if not self.path.startswith("/api/"):
                 self.send_header("Cache-Control", "no-cache")
+            # La app Android carga la página desde el teléfono y llama a este computador
+            self.send_header("Access-Control-Allow-Origin", "*")
             super().end_headers()
 
+        def do_OPTIONS(self):
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
+            self.send_header("Access-Control-Max-Age", "86400")
+            self.end_headers()
+
+        def leer_json(self):
+            largo = int(self.headers.get("Content-Length") or 0)
+            if largo > 20 * 1024 * 1024:
+                raise ValueError("demasiado grande")
+            d = json.loads(self.rfile.read(largo) or b"{}")
+            if not isinstance(d, dict):
+                raise ValueError
+            return d
+
         def do_POST(self):
-            if self.path.split("?")[0] != "/api/sync":
+            ruta = self.path.split("?")[0]
+            if ruta not in ("/api/sync", "/api/admin"):
                 return self.send_error(404)
             try:
-                largo = int(self.headers.get("Content-Length") or 0)
-                if largo > 20 * 1024 * 1024:
-                    return self.responder(413, {"error": "demasiado grande"})
-                cambios = json.loads(self.rfile.read(largo) or b"{}").get("cambios") or []
+                cuerpo = self.leer_json()
+                cambios = cuerpo.get("cambios") or []
                 if not isinstance(cambios, list):
                     raise ValueError
-            except (ValueError, json.JSONDecodeError):
+            except ValueError:
                 return self.responder(400, {"error": "formato inválido"})
+            admin = estado.es_admin(cuerpo.get("pin"))
+            if ruta == "/api/admin":
+                if not admin:
+                    time.sleep(1)  # frena a quien prueba PIN al azar
+                return self.responder(200, {"ok": admin})
             with estado.lock:
+                rechazados = 0
                 if cambios:
-                    estado.aplicar(cambios)
+                    rechazados = estado.aplicar(cambios, admin)
                     estado.escribir_excel()
-                return self.responder(200, {"datos": estado.lista(), "planilla": estado.info()})
+                return self.responder(200, {"datos": estado.lista(), "planilla": estado.info(), "admin": admin, "rechazados": rechazados})
 
     return Handler
 
@@ -330,10 +410,12 @@ def main():
     ap = argparse.ArgumentParser(description="Servidor de Bitácora de Flota")
     ap.add_argument("--carpeta", default=str(Path.home() / "Documents" / "Bitacora Flota"), help="Carpeta donde se guarda la planilla Excel")
     ap.add_argument("--puerto", type=int, default=8080)
+    ap.add_argument("--pin", help="Cambia el PIN de administrador")
     args = ap.parse_args()
     carpeta = Path(args.carpeta).expanduser()
     carpeta.mkdir(parents=True, exist_ok=True)
     estado = Estado(carpeta)
+    pin = estado.pin(args.pin)
     with estado.lock:
         estado.escribir_excel()
     threading.Thread(target=reintentar, args=(estado,), daemon=True).start()
@@ -342,6 +424,7 @@ def main():
     print(" BITÁCORA DE FLOTA · servidor del computador")
     print(f" Planilla Excel:  {estado.xlsx}")
     print(f" En el celular (misma red Wi-Fi) abre:  http://{ip_local()}:{args.puerto}")
+    print(f" PIN de administrador (agrega y edita camiones):  {pin}")
     print(" Deja esta ventana abierta. Para detener: Ctrl+C")
     print("=" * 62)
     try:

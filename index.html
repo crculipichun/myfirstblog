@@ -308,6 +308,26 @@ const CHECKLIST = [
 ];
 const CK_ITEMS = CHECKLIST.flatMap(([, items]) => items);
 
+// Flota de la empresa (N° 1 al 17 y 815). El programa del computador también la lee de aquí.
+const FLOTA_INICIAL = /*FLOTA_INICIAL*/[{"id":"cam-1","interno":"1","patente":"STFF54","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
+  {"id":"cam-2","interno":"2","patente":"STFG40","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
+  {"id":"cam-3","interno":"3","patente":"STFF52","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
+  {"id":"cam-4","interno":"4","patente":"SSYL78","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
+  {"id":"cam-5","interno":"5","patente":"SSYL59","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
+  {"id":"cam-6","interno":"6","patente":"VZTR73","marca":"Kia","modelo":"Frontier 2,5","anio":2026,"intervalo":10000},
+  {"id":"cam-7","interno":"7","patente":"STFF53","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
+  {"id":"cam-8","interno":"8","patente":"SSYL80","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
+  {"id":"cam-9","interno":"9","patente":"STFG52","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
+  {"id":"cam-10","interno":"10","patente":"STFG41","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
+  {"id":"cam-11","interno":"11","patente":"KWJV95","marca":"Kia","modelo":"Frontier 2,5","anio":2019,"intervalo":10000},
+  {"id":"cam-12","interno":"12","patente":"VYWC61","marca":"Kia","modelo":"Frontier 2,5","anio":2026,"intervalo":10000},
+  {"id":"cam-13","interno":"13","patente":"LRTF87","marca":"Kia","modelo":"Frontier 2,5","anio":2020,"intervalo":10000},
+  {"id":"cam-14","interno":"14","patente":"VRWD34","marca":"Kia","modelo":"Frontier 2,5","anio":2026,"intervalo":10000},
+  {"id":"cam-15","interno":"15","patente":"VRWD44","marca":"Kia","modelo":"Frontier 2,5","anio":2026,"intervalo":10000},
+  {"id":"cam-16","interno":"16","patente":"VRWD33","marca":"Kia","modelo":"Frontier 2,5","anio":2026,"intervalo":10000},
+  {"id":"cam-17","interno":"17","patente":"VZTR58","marca":"Hyundai","modelo":"Porter","anio":2026,"intervalo":10000},
+  {"id":"cam-815","interno":"815","patente":"RFBF71","marca":"Mitsubishi","modelo":"Fuso 815","anio":2021,"intervalo":10000}]/*FIN_FLOTA*/;
+
 /* ---------- Utilidades ---------- */
 const $ = (s, el = document) => el.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -324,6 +344,8 @@ const fmtPatente = p => (normPatente(p).match(/.{1,2}/g) || []).join("·");
 const plate = (p, lg) => `<span class="plate${lg ? " lg" : ""}"><small>CHILE</small>${esc(fmtPatente(p))}</span>`;
 const sget = k => { try { return localStorage.getItem(k); } catch { return null; } };
 const sset = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+const sdel = k => { try { localStorage.removeItem(k); } catch {} };
+const EN_APK = location.protocol === "file:";
 
 function toast(msg) {
   const t = $("#toast"); t.textContent = msg; t.hidden = false;
@@ -344,21 +366,45 @@ const Store = {
       const onErr = e => toast("Sin conexión con la planilla compartida (" + (e && e.code || "error") + ")");
       db.collection("camiones").onSnapshot(s => { this.camiones = s.docs.map(d => ({ ...d.data(), id: d.id })); if (!s.metadata.fromCache) UI.conectando = false; render(); }, onErr);
       db.collection("registros").onSnapshot(s => { this.registros = s.docs.map(d => ({ ...d.data(), id: d.id })); render(); }, onErr);
+      try { const u = await window.claude.use("user"); UI.admin = u ? await u.canEdit() : false; } catch { UI.admin = false; }
       this.badge(); return;
     }
     this.cargarLocal();
-    const enPC = await this.pedir("GET", "api/estado").then(r => r && r.app === "bitacora-flota").catch(() => false);
-    if (enPC || sget("bf_pc") === "1") {
-      this.mode = "pc"; sset("bf_pc", "1");
-      try { this.outbox = JSON.parse(sget("bf_outbox") || "[]"); } catch { this.outbox = []; }
-      await this.sync();
-      setInterval(() => this.sync(), 30000);
-      window.addEventListener("online", () => this.sync());
-      document.addEventListener("visibilitychange", () => { if (!document.hidden) this.sync(); });
+    const enPC = this.base() !== null && await this.pedir("GET", this.url("api/estado")).then(r => r && r.app === "bitacora-flota").catch(() => false);
+    if (enPC || (this.base() !== null && sget("bf_pc") === "1")) {
+      this.iniciarPC(); await this.sync();
     } else if (!sget("bf_data") && !sget("bf_seeded")) {
-      const s = ejemplo(); this.camiones = s.camiones; this.registros = s.registros; sset("bf_seeded", "1"); this.persist();
+      this.camiones = FLOTA_INICIAL.map(c => ({ ...c, creado: Date.now() })); this.registros = []; sset("bf_seeded", "1"); this.persist();
     }
+    if (this.mode === "local") UI.admin = sget("bf_admin_local") === "1";
     this.badge();
+  },
+  // En la app Android (file://) la dirección del computador se configura; servida desde el computador es la misma página.
+  base() { return EN_APK ? (sget("bf_server") || null) : ""; },
+  url(p) { return (this.base() || "") + p; },
+  iniciarPC() {
+    this.mode = "pc"; sset("bf_pc", "1"); UI.admin = !!sget("bf_pin");
+    try { this.outbox = JSON.parse(sget("bf_outbox") || "[]"); } catch { this.outbox = []; }
+    if (this._timer) return;
+    this._timer = setInterval(() => this.sync(), 30000);
+    window.addEventListener("online", () => this.sync());
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) this.sync(); });
+  },
+  async conectar(dir) {
+    let u = String(dir || "").trim(); if (!u) { toast("Escribe la dirección que muestra la ventana del computador."); return; }
+    if (!/^https?:\/\//i.test(u)) u = "http://" + u;
+    if (!/:\d+(\/|$)/.test(u.replace(/^https?:\/\//i, ""))) u = u.replace(/\/*$/, "") + ":8080";
+    u = u.replace(/\/*$/, "/");
+    const ok = await this.pedir("GET", u + "api/estado").then(r => r && r.app === "bitacora-flota").catch(() => false);
+    if (!ok) { toast("No se encontró el computador en " + u + ". Revisa que el programa esté abierto y que estés en el mismo Wi-Fi."); return; }
+    const antes = this.mode;
+    sset("bf_server", u); this.iniciarPC();
+    if (antes === "local") {
+      for (const r of this.registros.filter(x => !x.ejemplo)) this.outbox.push({ col: "registros", op: "set", doc: r });
+      for (const c of this.camiones.filter(x => !x.ejemplo)) this.outbox.push({ col: "camiones", op: "set", doc: c });
+      sset("bf_outbox", JSON.stringify(this.outbox));
+    }
+    await this.sync(); toast("Conectado al computador");
   },
   cargarLocal() {
     try { const raw = sget("bf_data"); if (raw) { const d = JSON.parse(raw); this.camiones = d.camiones || []; this.registros = d.registros || []; } } catch {}
@@ -378,7 +424,9 @@ const Store = {
     this.syncing = true;
     const enviados = this.outbox.slice();
     try {
-      const r = await this.pedir("POST", "api/sync", { cambios: enviados });
+      const r = await this.pedir("POST", this.url("api/sync"), { cambios: enviados, pin: sget("bf_pin") || "" });
+      if (r.rechazados) toast("Solo el administrador puede agregar o modificar camiones. Se descartaron " + r.rechazados + " cambio" + (r.rechazados === 1 ? "" : "s") + ".");
+      UI.admin = !!r.admin;
       this.outbox = this.outbox.slice(enviados.length);
       const d = { camiones: [...r.datos.camiones], registros: [...r.datos.registros] };
       for (const c of this.outbox) this.aplicar(d, c);
@@ -428,6 +476,29 @@ const Store = {
   }
 };
 
+/* ---------- Administrador: solo él agrega, edita y borra camiones ---------- */
+function soloAdmin() {
+  if (UI.admin) return true;
+  toast("Solo el administrador puede agregar o modificar camiones. Ingresa el PIN en Planilla.");
+  return false;
+}
+async function entrarAdmin(pin) {
+  pin = String(pin || "").trim();
+  if (Store.mode === "pc") {
+    const r = await Store.pedir("POST", Store.url("api/admin"), { pin }).catch(() => null);
+    if (!r) { toast("No hay conexión con el computador. Intenta de nuevo en su Wi-Fi."); return; }
+    if (!r.ok) { toast("PIN incorrecto. Revisa el PIN que muestra la ventana del computador."); return; }
+    sset("bf_pin", pin); UI.admin = true;
+  } else {
+    const guardado = sget("bf_pin_local");
+    if (!guardado) { if (pin.length < 4) { toast("El PIN debe tener al menos 4 números."); return; } sset("bf_pin_local", pin); }
+    else if (pin !== guardado) { toast("PIN incorrecto."); return; }
+    sset("bf_admin_local", "1"); UI.admin = true;
+  }
+  toast("Modo administrador activo"); render();
+}
+function salirAdmin() { sdel("bf_pin"); sdel("bf_admin_local"); UI.admin = false; toast("Saliste del modo administrador"); render(); }
+
 /* ---------- Datos de ejemplo ---------- */
 function ejemplo() {
   const d = n => { const x = new Date(); x.setDate(x.getDate() - n); return x.toISOString().slice(0, 10); };
@@ -454,12 +525,16 @@ function ejemplo() {
 /* ---------- Cálculos ---------- */
 const camion = id => Store.camiones.find(c => c.id === id);
 const porFecha = (a, b) => (b.fecha || "").localeCompare(a.fecha || "") || (b.km || 0) - (a.km || 0) || (b.creado || 0) - (a.creado || 0);
+// El odómetro vigente es la lectura más alta entre la ficha y los registros (así los auditores no necesitan editar la ficha).
+function kmDe(c) { let m = num(c.km); for (const r of Store.registros) if (r.camionId === c.id && num(r.km) != null && (m == null || num(r.km) > m)) m = num(r.km); return m; }
+function horoDe(c) { let m = num(c.horometro); for (const r of Store.registros) if (r.camionId === c.id && num(r.horometro) != null && (m == null || num(r.horometro) > m)) m = num(r.horometro); return m; }
+const ordenInterno = (a, b) => (num(a.interno) ?? 1e9) - (num(b.interno) ?? 1e9) || normPatente(a.patente).localeCompare(normPatente(b.patente));
 const registrosDe = id => Store.registros.filter(r => r.camionId === id).sort(porFecha);
 function ultimo(id, tipo) { return registrosDe(id).find(r => r.tipo === tipo); }
 function estadoAceite(c) {
   const u = ultimo(c.id, "aceite");
   if (!u || u.proximoKm == null) return { nivel: "info", texto: "Sin cambio registrado", restante: null, ultimo: u };
-  const restante = u.proximoKm - (c.km || 0);
+  const restante = u.proximoKm - (kmDe(c) ?? 0);
   const tramo = Math.max(1, u.proximoKm - (u.km || 0));
   const pct = Math.max(0, Math.min(100, (restante / tramo) * 100));
   if (restante <= 0) return { nivel: "bad", texto: "Vencido hace " + fmtKm(-restante), restante, pct: 100, ultimo: u };
@@ -507,8 +582,8 @@ function alertas() {
     if (!au || dd > 30) out.push({ nivel: "info", camion: c, texto: au ? `Última auditoría hace ${dd} días` : "Sin auditorías", accion: { tipo: "auditoria", camionId: c.id } });
     for (const [k, l] of DOCS) { const e = estadoDoc(c[k]); if (e && e.nivel !== "ok") out.push({ nivel: e.nivel, camion: c, texto: `${l}: ${e.texto.toLowerCase()}`, editar: c.id }); }
     const pv = ultimo(c.id, "preventiva");
-    if (pv && pv.proximoKm && pv.proximoKm - (c.km || 0) <= 1500 && !(a.ultimo && pv.proximoKm === a.ultimo.proximoKm))
-      out.push({ nivel: pv.proximoKm <= (c.km || 0) ? "bad" : "warn", camion: c, texto: `Preventiva (${pv.servicio || "servicio"}) a los ${fmtKm(pv.proximoKm)}`, accion: { tipo: "preventiva", camionId: c.id } });
+    if (pv && pv.proximoKm && pv.proximoKm - (kmDe(c) ?? 0) <= 1500 && !(a.ultimo && pv.proximoKm === a.ultimo.proximoKm))
+      out.push({ nivel: pv.proximoKm <= (kmDe(c) ?? 0) ? "bad" : "warn", camion: c, texto: `Preventiva (${pv.servicio || "servicio"}) a los ${fmtKm(pv.proximoKm)}`, accion: { tipo: "preventiva", camionId: c.id } });
     if (pv && pv.proximaFecha) { const dd2 = -diasDesde(pv.proximaFecha); if (dd2 <= 7) out.push({ nivel: dd2 < 0 ? "bad" : "warn", camion: c, texto: `Preventiva programada ${dd2 < 0 ? "vencida el" : "para el"} ${fmtFecha(pv.proximaFecha)}`, accion: { tipo: "preventiva", camionId: c.id } }); }
   }
   for (const f of abiertas()) {
@@ -520,7 +595,7 @@ function alertas() {
 }
 
 /* ---------- Estado de la UI ---------- */
-const UI = { view: "inicio", camionId: null, filtro: { tipo: "", camionId: "", estado: "", q: "" }, form: null, confirm: null, conectando: true };
+const UI = { admin: false, view: "inicio", camionId: null, filtro: { tipo: "", camionId: "", estado: "", q: "" }, form: null, confirm: null, conectando: true };
 
 function go(view, extra = {}) {
   UI.view = view; Object.assign(UI, { camionId: null, confirm: null }, extra);
@@ -541,7 +616,9 @@ function render() {
 }
 
 const ejemploBanner = () => Store.camiones.some(c => c.ejemplo)
-  ? `<div class="banner"><span>Estás viendo datos de ejemplo.</span><button class="btn sm" data-act="borrar-ejemplos">Borrar ejemplos</button></div>` : "";
+  ? `<div class="banner"><span>Estás viendo datos de ejemplo.</span>${UI.admin ? `<button class="btn sm" data-act="borrar-ejemplos">Borrar ejemplos</button>` : ""}</div>` : "";
+const apkBanner = () => EN_APK && Store.mode !== "pc"
+  ? `<div class="banner"><span>Conecta la app al computador para que los registros lleguen a la planilla Excel.</span><button class="btn sm" data-nav-link="planilla">Conectar</button></div>` : "";
 
 function itemRegistro(r, conPatente = true) {
   const c = camion(r.camionId);
@@ -557,14 +634,15 @@ function emptyFlota() {
   return `<div class="panel empty">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16V6h12v10M14 9h4l4 4v3h-8"/><circle cx="6.5" cy="17.5" r="2"/><circle cx="17.5" cy="17.5" r="2"/></svg>
     <h3>${UI.conectando && Store.mode === "shared" ? "Cargando la flota…" : "Aún no hay camiones"}</h3>
-    <p class="muted small" style="margin:0;max-width:34ch">Agrega cada camión con su patente y kilometraje. Después podrás registrar auditorías, mantenciones, fallas y cambios de aceite.</p>
-    <div class="row" style="justify-content:center"><button class="btn primary" data-act="nuevo-camion">Agregar camión</button><button class="btn" data-act="cargar-ejemplos">Cargar ejemplo</button></div>
+    <p class="muted small" style="margin:0;max-width:34ch">Cada camión se agrega con su patente y kilometraje. Después podrás registrar auditorías, mantenciones, fallas y cambios de aceite.</p>
+    ${UI.admin ? `<div class="row" style="justify-content:center"><button class="btn primary" data-act="nuevo-camion">Agregar camión</button><button class="btn" data-act="cargar-ejemplos">Cargar ejemplo</button></div>`
+      : `<p class="small" style="margin:0">Los camiones los agrega el administrador.</p><button class="btn" data-nav-link="planilla">Soy administrador</button>`}
   </div>`;
 }
 
 /* ---------- Vistas ---------- */
 function vInicio() {
-  if (!Store.camiones.length) return `<section><span class="eyebrow">${fmtFecha(hoy())}</span><h1>Control de flota</h1></section>${emptyFlota()}`;
+  if (!Store.camiones.length) return `${apkBanner()}<section><span class="eyebrow">${fmtFecha(hoy())}</span><h1>Control de flota</h1></section>${emptyFlota()}`;
   const al = alertas();
   const fa = abiertas().length;
   const ac = Store.camiones.filter(c => ["bad", "warn"].includes(estadoAceite(c).nivel)).length;
@@ -572,7 +650,7 @@ function vInicio() {
   const aud = Store.registros.filter(r => r.tipo === "auditoria" && (r.fecha || "").startsWith(mes)).length;
   const det = Store.camiones.filter(c => estadoCamion(c).nivel === "bad").length;
   const recientes = [...Store.registros].sort(porFecha).slice(0, 6);
-  return `${ejemploBanner()}
+  return `${apkBanner()}${ejemploBanner()}
   <section><span class="eyebrow">${fmtFecha(hoy())}</span><h1>Control de flota</h1></section>
   <div class="tiles">
     <div class="panel tile"><b class="num">${Store.camiones.length - det}/${Store.camiones.length}</b><span>Camiones operativos</span></div>
@@ -583,7 +661,7 @@ function vInicio() {
   <section><div class="spread"><h2>Requiere atención</h2><span class="muted small">${al.length} pendiente${al.length === 1 ? "" : "s"}</span></div>
     ${al.length ? `<div class="panel list">${al.slice(0, 8).map(a => `<div class="alert"><span class="sev ${a.nivel}"></span>
       <div class="body" style="flex:1;min-width:0;display:grid;gap:6px"><div class="row">${plate(a.camion.patente)}<span class="small">${esc(a.camion.marca || "")} ${esc(a.camion.modelo || "")}</span></div><span>${esc(a.texto)}</span></div>
-      ${a.registro ? `<button class="btn sm" data-act="ver-reg" data-id="${esc(a.registro)}">Ver</button>` : a.editar ? `<button class="btn sm" data-act="editar-camion" data-id="${esc(a.editar)}">Actualizar</button>` : `<button class="btn sm" data-act="registrar" data-tipo="${a.accion.tipo}" data-camion="${esc(a.accion.camionId)}">Registrar</button>`}</div>`).join("")}</div>
+      ${a.registro ? `<button class="btn sm" data-act="ver-reg" data-id="${esc(a.registro)}">Ver</button>` : a.editar ? (UI.admin ? `<button class="btn sm" data-act="editar-camion" data-id="${esc(a.editar)}">Actualizar</button>` : "") : `<button class="btn sm" data-act="registrar" data-tipo="${a.accion.tipo}" data-camion="${esc(a.accion.camionId)}">Registrar</button>`}</div>`).join("")}</div>
       ${al.length > 8 ? `<span class="muted small">y ${al.length - 8} más en Flota.</span>` : ""}`
     : `<div class="panel alert"><span class="sev" style="background:var(--ok)"></span><span>Todo al día. No hay fallas abiertas ni cambios de aceite por vencer.</span></div>`}
   </section>
@@ -593,13 +671,13 @@ function vInicio() {
 }
 
 function vFlota() {
-  const cams = [...Store.camiones].sort((a, b) => ({ bad: 0, warn: 1, ok: 2 }[estadoCamion(a).nivel] - { bad: 0, warn: 1, ok: 2 }[estadoCamion(b).nivel]) || normPatente(a.patente).localeCompare(normPatente(b.patente)));
-  return `${ejemploBanner()}<section><div class="spread"><h1>Flota</h1><button class="btn primary sm" data-act="nuevo-camion">+ Camión</button></div>
+  const cams = [...Store.camiones].sort((a, b) => ({ bad: 0, warn: 1, ok: 2 }[estadoCamion(a).nivel] - { bad: 0, warn: 1, ok: 2 }[estadoCamion(b).nivel]) || ordenInterno(a, b));
+  return `${ejemploBanner()}<section><div class="spread"><h1>Flota</h1>${UI.admin ? `<button class="btn primary sm" data-act="nuevo-camion">+ Camión</button>` : ""}</div>
   <span class="muted small">${cams.length} camion${cams.length === 1 ? "" : "es"} · ordenados por prioridad</span></section>
   ${cams.length ? `<div class="panel list">${cams.map(c => {
     const a = estadoAceite(c), e = estadoCamion(c), f = abiertas(c.id).length;
     return `<button class="truck" data-act="ver-camion" data-id="${esc(c.id)}">
-      <div class="top">${plate(c.patente, true)}<div style="flex:1;min-width:0"><div style="font-weight:600">${c.interno ? `<span class="num">#${esc(c.interno)}</span> ` : ""}${esc(c.marca || "")} ${esc(c.modelo || "")}</div><div class="muted small"><span class="num">${fmtKm(c.km)}</span>${c.anio ? " · " + esc(c.anio) : ""}${c.conductor ? " · " + esc(c.conductor) : ""}</div></div><span class="pill ${e.nivel}">${e.texto}</span></div>
+      <div class="top">${plate(c.patente, true)}<div style="flex:1;min-width:0"><div style="font-weight:600">${c.interno ? `<span class="num">#${esc(c.interno)}</span> ` : ""}${esc(c.marca || "")} ${esc(c.modelo || "")}</div><div class="muted small">${[kmDe(c) != null ? `<span class="num">${fmtKm(kmDe(c))}</span>` : "Sin odómetro", c.anio && esc(c.anio), c.conductor && esc(c.conductor)].filter(Boolean).join(" · ")}</div></div><span class="pill ${e.nivel}">${e.texto}</span></div>
       <div style="display:grid;gap:6px"><div class="spread small"><span class="muted">Aceite</span><span style="color:var(--${a.nivel === "ok" || a.nivel === "info" ? "muted" : a.nivel})">${esc(a.texto)}</span></div>
       ${a.restante != null ? `<div class="oilbar ${a.nivel}"><i style="width:${Math.round(a.pct)}%"></i></div>` : ""}
       ${f ? `<span class="small" style="color:var(--bad)">${f} falla${f > 1 ? "s" : ""} abierta${f > 1 ? "s" : ""}</span>` : ""}</div>
@@ -621,12 +699,12 @@ function vCamion() {
     <h1>${esc(c.marca || "")} ${esc(c.modelo || "")}</h1></section>
   <div class="panel" style="padding:16px;display:grid;gap:14px">
     <div class="tiles" style="grid-template-columns:repeat(2,minmax(0,1fr))">
-      <div><span class="eyebrow">Odómetro</span><div class="num" style="font-size:22px;font-weight:700">${fmtKm(c.km)}</div></div>
-      <div><span class="eyebrow">Horómetro</span><div class="num" style="font-size:22px;font-weight:700">${c.horometro != null ? miles(c.horometro) + " h" : "—"}</div></div>
+      <div><span class="eyebrow">Odómetro</span><div class="num" style="font-size:22px;font-weight:700">${fmtKm(kmDe(c))}</div></div>
+      <div><span class="eyebrow">Horómetro</span><div class="num" style="font-size:22px;font-weight:700">${horoDe(c) != null ? miles(horoDe(c)) + " h" : "—"}</div></div>
     </div>
     <form id="f-odo" class="grid2" style="gap:10px;align-items:end" novalidate>
-      <label class="field"><span>Nueva lectura (km)</span><input id="odo-km" name="km" type="number" inputmode="numeric" min="0" placeholder="${esc(c.km ?? "")}"></label>
-      <label class="field"><span>Horómetro (h)</span><input id="odo-h" name="horometro" type="number" inputmode="decimal" min="0" step="0.1" placeholder="${esc(c.horometro ?? "")}"></label>
+      <label class="field"><span>Nueva lectura (km)</span><input id="odo-km" name="km" type="number" inputmode="numeric" min="0" placeholder="${esc(kmDe(c) ?? "")}"></label>
+      <label class="field"><span>Horómetro (h)</span><input id="odo-h" name="horometro" type="number" inputmode="decimal" min="0" step="0.1" placeholder="${esc(horoDe(c) ?? "")}"></label>
       <button class="btn primary" type="submit" style="grid-column:1/-1">Actualizar odómetro</button>
     </form>
   </div>
@@ -639,12 +717,12 @@ function vCamion() {
   <section><h2>Vencimientos</h2><div class="panel list">${DOCS.map(([k, l]) => { const d = estadoDoc(c[k]);
     return `<div class="alert"><span class="sev ${d ? d.nivel === "ok" ? "" : d.nivel : "info"}" style="${d && d.nivel === "ok" ? "background:var(--ok)" : ""}"></span><div style="flex:1;min-width:0"><div style="font-weight:600">${l}</div><span class="small muted">${d ? esc(d.texto) : "Sin fecha registrada"}</span></div></div>`; }).join("")}</div></section>
   ${ident ? `<section><h2>Ficha del camión</h2><div class="panel" style="padding:14px"><dl class="kv">${ident}${kv("Notas", esc(c.notas))}</dl></div></section>` : ""}
-  <div class="grid2"><button class="btn primary" data-act="registrar" data-camion="${esc(c.id)}">+ Registrar</button><button class="btn" data-act="editar-camion" data-id="${esc(c.id)}">Editar ficha</button></div>
+  <div class="${UI.admin ? "grid2" : ""}" style="display:grid"><button class="btn primary" data-act="registrar" data-camion="${esc(c.id)}">+ Registrar</button>${UI.admin ? `<button class="btn" data-act="editar-camion" data-id="${esc(c.id)}">Editar ficha</button>` : ""}</div>
   <section><h2>Historial (${regs.length})</h2>
     ${regs.length ? `<div class="panel list">${regs.map(r => itemRegistro(r, false)).join("")}</div>` : `<p class="muted">Sin registros para este camión.</p>`}</section>
-  <section>${UI.confirm === "camion"
+  ${!UI.admin ? "" : `<section>${UI.confirm === "camion"
     ? `<div class="confirm">¿Borrar ${esc(fmtPatente(c.patente))}? Sus ${regs.length} registros también se borrarán.<div class="grid2"><button class="btn" data-act="cancelar">Cancelar</button><button class="btn danger solid" data-act="borrar-camion-ok" data-id="${esc(c.id)}">Sí, borrar</button></div></div>`
-    : `<button class="btn danger" data-act="borrar-camion">Borrar camión</button>`}</section>`;
+    : `<button class="btn danger" data-act="borrar-camion">Borrar camión</button>`}</section>`}`;
 }
 
 const CAMPOS_CAMION = [
@@ -656,7 +734,7 @@ const CAMPOS_CAMION = [
     ["anio", "Año", { type: "number", min: 1980, max: 2100 }], ["color", "Color", {}],
     ["vin", "VIN / N° chasis", { autocapitalize: "characters" }], ["motor", "N° motor", { autocapitalize: "characters" }]]],
   ["Odómetro y uso", [
-    ["km", "Odómetro (km) *", { type: "number", required: true, min: 0 }], ["horometro", "Horómetro (h)", { type: "number", min: 0, step: 0.1 }],
+    ["km", "Odómetro (km)", { type: "number", min: 0 }], ["horometro", "Horómetro (h)", { type: "number", min: 0, step: 0.1 }],
     ["intervalo", "Intervalo cambio de aceite (km)", { type: "number", min: 1000, step: 500, def: 15000 }],
     ["estanque", "Estanque combustible (L)", { type: "number", min: 0 }], ["neumaticos", "Medida neumáticos", { placeholder: "Ej. 295/80 R22.5" }]]],
   ["Asignación", [["conductor", "Conductor asignado", {}], ["faena", "Faena / centro de costo", {}]]],
@@ -667,7 +745,7 @@ const NUM_CAMION = ["anio", "km", "horometro", "intervalo", "estanque"];
 function vCamionForm() {
   const c = UI.camionId ? camion(UI.camionId) || {} : {};
   const campo = ([k, l, o]) => {
-    const val = c[k] ?? o.def ?? "";
+    const val = c.id && k === "km" ? kmDe(c) ?? "" : c.id && k === "horometro" ? horoDe(c) ?? "" : c[k] ?? o.def ?? "";
     const input = o.options
       ? `<select id="cam-${k}" name="${k}"><option value="">Selecciona…</option>${o.options.map(x => `<option ${x === val ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>`
       : `<input id="cam-${k}" name="${k}" type="${o.type || "text"}"${o.type === "number" ? ` inputmode="${o.step && o.step < 1 ? "decimal" : "numeric"}"` : ""}${o.required ? " required" : ""}${o.min != null ? ` min="${o.min}"` : ""}${o.max != null ? ` max="${o.max}"` : ""}${o.step ? ` step="${o.step}"` : ""}${o.list ? ` list="${o.list}"` : ""}${o.autocapitalize ? ` autocapitalize="${o.autocapitalize}" autocomplete="off"` : ""}${o.placeholder ? ` placeholder="${esc(o.placeholder)}"` : ""} value="${esc(val)}">`;
@@ -696,11 +774,11 @@ function vNuevo() {
     <div class="panel" style="padding:16px;display:grid;gap:16px">
       <label class="field"><span>Camión *</span><select id="reg-camion" name="camionId" required>
         <option value="">Selecciona patente…</option>
-        ${[...Store.camiones].sort((a, b) => normPatente(a.patente).localeCompare(normPatente(b.patente))).map(x => `<option value="${esc(x.id)}" ${x.id === v.camionId ? "selected" : ""}>${esc(fmtPatente(x.patente))} — ${esc(x.marca || "")} ${esc(x.modelo || "")}</option>`).join("")}
+        ${[...Store.camiones].sort(ordenInterno).map(x => `<option value="${esc(x.id)}" ${x.id === v.camionId ? "selected" : ""}>${x.interno ? "N° " + esc(x.interno) + " · " : ""}${esc(fmtPatente(x.patente))} — ${esc(x.marca || "")} ${esc(x.modelo || "")}</option>`).join("")}
       </select></label>
       <div class="grid2">
         <label class="field"><span>Fecha *</span><input id="reg-fecha" name="fecha" type="date" required value="${esc(v.fecha || hoy())}"></label>
-        <label class="field"><span>Odómetro (km) *</span><input id="reg-km" name="km" type="number" inputmode="numeric" min="0" required value="${esc(v.km ?? (c ? c.km : ""))}" placeholder="${c ? esc(c.km) : ""}"></label>
+        <label class="field"><span>Odómetro (km) *</span><input id="reg-km" name="km" type="number" inputmode="numeric" min="0" required value="${esc(v.km ?? (c ? kmDe(c) ?? "" : ""))}" placeholder="${c ? esc(kmDe(c) ?? "") : ""}"></label>
       </div>
       <div class="grid2">
         <label class="field"><span>${tipo === "falla" ? "Reportado por" : tipo === "auditoria" ? "Auditor" : "Responsable"}</span><input id="reg-resp" name="responsable" value="${esc(v.responsable ?? sget("bf_resp") ?? "")}" autocomplete="name"></label>
@@ -742,9 +820,9 @@ function seccionTipo(tipo, v, c) {
     <label class="field"><span>Severidad *</span>${sel("reg-sev", "severidad", SEVERIDADES, v.severidad, true)}</label></div>
     <label class="check"><input type="checkbox" id="reg-detenido" name="detenido" ${v.detenido ? "checked" : ""}> Camión detenido (fuera de servicio)</label></div>`;
   if (tipo === "odometro") return `<div class="fieldset">
-    <label class="field"><span>Horómetro (h)</span><input id="reg-horometro" name="horometro" type="number" inputmode="decimal" step="0.1" min="0" value="${esc(v.horometro ?? (c && c.horometro != null ? c.horometro : ""))}"></label></div>`;
+    <label class="field"><span>Horómetro (h)</span><input id="reg-horometro" name="horometro" type="number" inputmode="decimal" step="0.1" min="0" value="${esc(v.horometro ?? (c ? horoDe(c) ?? "" : ""))}"></label></div>`;
   if (tipo === "aceite") {
-    const km = num(v.km ?? (c ? c.km : null)); const prox = v.proximoKm ?? (km != null && c ? km + (c.intervalo || 15000) : "");
+    const km = num(v.km ?? (c ? kmDe(c) : null)); const prox = v.proximoKm ?? (km != null && c ? km + (c.intervalo || 15000) : "");
     return `<div class="fieldset">
     <div class="grid2"><label class="field"><span>Aceite *</span><input id="reg-aceite" name="tipoAceite" list="dl-aceites" required value="${esc(v.tipoAceite || "")}" placeholder="15W-40"></label>
     <label class="field"><span>Litros</span><input id="reg-litros" name="litros" type="number" inputmode="decimal" step="0.5" min="0" value="${esc(v.litros ?? "")}"></label></div>
@@ -774,7 +852,7 @@ function wireRegistroForm() {
     if (e.target.closest("[data-act=todo-ok]")) { UI.form = leerFormRegistro(); UI.form.checklist = Object.fromEntries(CK_ITEMS.map(([k]) => [k, (UI.form.checklist || {})[k] && UI.form.checklist[k] !== "OK" ? UI.form.checklist[k] : "OK"])); f.querySelectorAll(".seg").forEach(s => s.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === UI.form.checklist[s.dataset.ck]))); actualizarPuntaje(); }
   });
   const selC = $("#reg-camion"), km = $("#reg-km");
-  selC.addEventListener("change", () => { const c = camion(selC.value); if (c && (!km.value || km.dataset.auto !== "0")) { km.value = c.km ?? ""; km.dataset.auto = "1"; } autoProx(); });
+  selC.addEventListener("change", () => { const c = camion(selC.value); if (c && (!km.value || km.dataset.auto !== "0")) { km.value = kmDe(c) ?? ""; km.dataset.auto = "1"; } autoProx(); });
   km.addEventListener("input", () => { km.dataset.auto = "0"; autoProx(); });
   const prox = $("#reg-proxkm"); if (prox) prox.addEventListener("input", () => { prox.dataset.auto = "0"; });
   function autoProx() { const p = $("#reg-proxkm"); const c = camion(selC.value); if (p && p.dataset.auto === "1" && $("#reg-aceite") && c && km.value) p.value = Number(km.value) + (c.intervalo || 15000); }
@@ -793,18 +871,14 @@ async function guardarRegistro(e) {
   if (v.tipo === "aceite" && !v.tipoAceite) falta.push("tipo de aceite");
   if (v.tipo === "auditoria" && puntaje(v.checklist).total === 0) falta.push("al menos un punto del checklist");
   if (falta.length) { toast("Falta completar: " + falta.join(", ")); return; }
-  if (v.tipo === "odometro" && !v.id && num(v.km) < (c.km || 0)) { toast(`La lectura es menor que el odómetro actual (${fmtKm(c.km)}).`); return; }
+  if (v.tipo === "odometro" && !v.id && num(v.km) < (kmDe(c) ?? 0)) { toast(`La lectura es menor que el odómetro actual (${fmtKm(kmDe(c))}).`); return; }
   const r = { ...v, id: v.id || uid(), creado: v.creado || Date.now(), km: num(v.km), costo: num(v.costo), litros: num(v.litros), horas: num(v.horas), horometro: num(v.horometro), proximoKm: num(v.proximoKm), patente: normPatente(c.patente) };
   if (r.estado === "Cerrado" && !r.cerrado) r.cerrado = hoy();
   if (r.estado !== "Cerrado") delete r.cerrado;
   delete r.ejemplo;
   if (r.tipo !== "auditoria") delete r.checklist;
   if (r.responsable) sset("bf_resp", r.responsable);
-  try {
-    await Store.save("registros", r);
-    const kmNuevo = r.km != null && r.km > (c.km || 0), hNuevo = r.horometro != null && r.horometro > (c.horometro || 0);
-    if (kmNuevo || hNuevo) await Store.save("camiones", { ...c, km: kmNuevo ? r.km : c.km, horometro: hNuevo ? r.horometro : (c.horometro ?? null) });
-  } catch { return; }
+  try { await Store.save("registros", r); } catch { return; }
   UI.form = null; toast(v.id ? "Registro actualizado" : "Registro guardado");
   go("camion", { camionId: c.id });
 }
@@ -814,10 +888,10 @@ function wireCamionForm() {
   ["#cam-patente", "#cam-vin", "#cam-motor"].forEach(sel => { const p = $(sel); p.addEventListener("input", () => { const pos = p.selectionStart; p.value = p.value.toUpperCase(); p.setSelectionRange(pos, pos); }); });
   f.addEventListener("submit", async e => {
     e.preventDefault();
+    if (!soloAdmin()) return;
     const fd = Object.fromEntries(new FormData(f).entries());
     const pat = normPatente(fd.patente);
     if (pat.length < 5) { toast("Ingresa una patente válida (ej. KZRT41)."); return; }
-    if (num(fd.km) == null) { toast("Ingresa el odómetro actual (km)."); return; }
     const prev = UI.camionId ? camion(UI.camionId) : null;
     if (Store.camiones.some(x => normPatente(x.patente) === pat && (!prev || x.id !== prev.id))) { toast("Ya existe un camión con la patente " + fmtPatente(pat) + "."); return; }
     const c = { ...(prev || {}), id: prev ? prev.id : uid(), creado: prev?.creado || Date.now() };
@@ -836,7 +910,7 @@ function vHistorial() {
   return `<section><h1>Historial</h1>
     <div class="chips" role="group" aria-label="Filtrar por tipo"><button class="chip" data-filtro-tipo="" aria-pressed="${!F.tipo}">Todos</button>${Object.entries(TIPOS).map(([k, t]) => `<button class="chip" data-filtro-tipo="${k}" aria-pressed="${F.tipo === k}">${t.label}</button>`).join("")}</div>
     <div class="grid2">
-      <label class="field"><span>Camión</span><select id="fil-camion" data-filtro="camionId"><option value="">Todos</option>${Store.camiones.map(c => `<option value="${esc(c.id)}" ${F.camionId === c.id ? "selected" : ""}>${esc(fmtPatente(c.patente))}</option>`).join("")}</select></label>
+      <label class="field"><span>Camión</span><select id="fil-camion" data-filtro="camionId"><option value="">Todos</option>${[...Store.camiones].sort(ordenInterno).map(c => `<option value="${esc(c.id)}" ${F.camionId === c.id ? "selected" : ""}>${c.interno ? "N° " + esc(c.interno) + " · " : ""}${esc(fmtPatente(c.patente))}</option>`).join("")}</select></label>
       <label class="field"><span>Estado</span><select id="fil-estado" data-filtro="estado"><option value="">Todos</option>${ESTADOS.map(s => `<option ${F.estado === s ? "selected" : ""}>${s}</option>`).join("")}</select></label>
     </div>
     <label class="field"><span>Buscar</span><input id="fil-q" type="search" data-filtro="q" value="${esc(F.q)}" placeholder="Patente, sistema, responsable…"></label>
@@ -855,7 +929,21 @@ function vPlanilla() {
       : P.pendiente ? esc(P.error || "La planilla está abierta en Excel. Ciérrala en el computador y se actualizará sola.")
       : `Cada registro se agrega solo a la planilla.${P.ultima ? " Última actualización: " + esc(P.ultima.replace("T", " ")) : ""}`}</span>
     <button class="btn" data-act="sync">Enviar ahora</button></div>`;
-  return `${pcPanel}<section><h1>Planilla Excel</h1>
+  const srvCard = !EN_APK ? "" : `<div class="panel" style="padding:16px;display:grid;gap:10px">
+    <h3>Computador con la planilla</h3>
+    <span class="small muted">Escribe la dirección que muestra la ventana del programa en el computador. El celular debe estar en el mismo Wi-Fi.</span>
+    <label class="field"><span>Dirección</span><input id="srv-url" inputmode="url" autocapitalize="none" autocomplete="off" placeholder="192.168.1.23:8080" value="${esc((sget("bf_server") || "").replace(/^http:\/\//, "").replace(/\/$/, ""))}"></label>
+    <button class="btn primary" data-act="conectar">${Store.mode === "pc" ? "Cambiar computador" : "Conectar"}</button></div>`;
+  const adminCard = `<div class="panel" style="padding:16px;display:grid;gap:10px">
+    <div class="spread"><h3>Administrador</h3>${UI.admin ? `<span class="pill ok">Activo</span>` : ""}</div>
+    ${UI.admin
+      ? `<span class="small muted">Puedes agregar, editar y borrar camiones.</span>${Store.mode === "shared" ? "" : `<button class="btn" data-act="admin-salir">Salir del modo administrador</button>`}`
+      : Store.mode === "shared" ? `<span class="small muted">Solo los editores de esta página pueden agregar o modificar camiones.</span>`
+      : `<span class="small muted">${Store.mode === "pc" ? "Solo el administrador agrega, edita o borra camiones. El PIN aparece en la ventana del programa en el computador."
+          : sget("bf_pin_local") ? "Solo el administrador agrega, edita o borra camiones en este teléfono." : "Crea un PIN de administrador para este teléfono (mínimo 4 números)."}</span>
+        <label class="field"><span>PIN</span><input id="admin-pin" type="password" inputmode="numeric" autocomplete="off"></label>
+        <button class="btn primary" data-act="admin-entrar">${Store.mode !== "pc" && !sget("bf_pin_local") ? "Crear PIN" : "Entrar"}</button>`}</div>`;
+  return `${srvCard}${pcPanel}${adminCard}<section><h1>Planilla Excel</h1>
     <p class="muted" style="margin:0">${Store.mode === "pc" ? "También puedes descargar una copia en este teléfono:" : "Descarga toda la información en"} un archivo .xlsx con una hoja por tipo de registro. Cada hoja trae filtros listos para ordenar por patente, fecha o estado.</p></section>
   <div class="panel" style="padding:16px;display:grid;gap:14px">
     <ul class="sheetlist">
@@ -878,7 +966,7 @@ function vPlanilla() {
       : "Los registros se guardan en este teléfono, incluso sin internet. Descarga la planilla o un respaldo con frecuencia: si borras los datos del navegador se pierden."}</p>
   </section>
   <section><h2>Respaldo</h2>
-    <div class="grid2"><button class="btn" data-act="respaldo">Descargar respaldo</button><label class="btn" for="imp-json">Restaurar respaldo</label></div>
+    <div class="${UI.admin ? "grid2" : ""}" style="display:grid"><button class="btn" data-act="respaldo">Descargar respaldo</button>${UI.admin ? `<label class="btn" for="imp-json">Restaurar respaldo</label>` : ""}</div>
     <input id="imp-json" type="file" accept="application/json,.json" hidden>
     <span class="muted small">El respaldo (.json) sirve para pasar los datos a otro teléfono. Restaurar agrega o actualiza registros; no borra los existentes.</span>
   </section>`;
@@ -916,6 +1004,12 @@ function closeSheet() { $("#overlay").innerHTML = ""; }
 
 /* ---------- Excel ---------- */
 async function guardarArchivo(filename, data) {
+  if (window.AndroidApp && typeof window.AndroidApp.guardarArchivo === "function") {
+    const buf = new Uint8Array(await data.arrayBuffer()); let bin = "";
+    for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    toast(window.AndroidApp.guardarArchivo(filename, btoa(bin)));
+    return;
+  }
   let dl = null;
   if (window.claude && typeof window.claude.use === "function") { try { dl = await window.claude.use("downloads"); } catch { dl = null; } }
   if (dl) {
@@ -947,7 +1041,7 @@ async function exportarExcel() {
   XLSX.utils.book_append_sheet(wb, hoja(Store.camiones.map(c => {
     const a = estadoAceite(c), au = ultimo(c.id, "auditoria");
     return { "Patente": fmtPatente(c.patente), "N° interno": c.interno || "", "Tipo": c.tipoCamion || "", "Marca": c.marca, "Modelo": c.modelo, "Año": c.anio, "Color": c.color || "", "VIN / N° chasis": c.vin || "", "N° motor": c.motor || "",
-      "Odómetro (km)": c.km, "Horómetro (h)": c.horometro ?? "", "Conductor": c.conductor || "", "Faena / centro de costo": c.faena || "", "Intervalo aceite (km)": c.intervalo,
+      "Odómetro (km)": kmDe(c), "Horómetro (h)": horoDe(c) ?? "", "Conductor": c.conductor || "", "Faena / centro de costo": c.faena || "", "Intervalo aceite (km)": c.intervalo,
       ...Object.fromEntries(DOCS.map(([k, l]) => ["Vence " + l, c[k] || ""])), "Estanque (L)": c.estanque ?? "", "Neumáticos": c.neumaticos || "",
       "Último cambio aceite": a.ultimo?.fecha || "", "Km último cambio": a.ultimo?.km ?? "", "Próximo cambio (km)": a.ultimo?.proximoKm ?? "", "Km restantes": a.restante ?? "",
       "Estado aceite": a.nivel === "bad" ? "Vencido" : a.nivel === "warn" ? "Por vencer" : a.nivel === "ok" ? "Al día" : "Sin registro",
@@ -1003,8 +1097,8 @@ document.addEventListener("click", async e => {
     case "cerrar": if (e.target === el || el.tagName === "BUTTON") closeSheet(); break;
     case "ver-reg": verRegistro(id); break;
     case "ver-camion": go("camion", { camionId: id }); break;
-    case "nuevo-camion": go("camion-form"); break;
-    case "editar-camion": go("camion-form", { camionId: id }); break;
+    case "nuevo-camion": if (!soloAdmin()) break; go("camion-form"); break;
+    case "editar-camion": if (!soloAdmin()) break; go("camion-form", { camionId: id }); break;
     case "volver-camion": UI.camionId ? go("camion", { camionId: UI.camionId }) : go("flota"); break;
     case "registrar": go("nuevo", { form: { tipo: el.dataset.tipo || "auditoria", camionId: el.dataset.camion || "" } }); break;
     case "limpiar": UI.form = { tipo: (UI.form && UI.form.tipo) || leerFormRegistro().tipo }; $("#app").innerHTML = vNuevo(); wireRegistroForm(); break;
@@ -1018,12 +1112,15 @@ document.addEventListener("click", async e => {
       const n = { ...r, estado: el.dataset.estado }; if (n.estado === "Cerrado") n.cerrado = n.cerrado || hoy(); else delete n.cerrado;
       try { await Store.save("registros", n); toast("Estado: " + n.estado); verRegistro(id); } catch {} break;
     }
-    case "borrar-camion": UI.confirm = "camion"; render(); break;
+    case "borrar-camion": if (!soloAdmin()) break; UI.confirm = "camion"; render(); break;
     case "cancelar": UI.confirm = null; render(); break;
-    case "borrar-camion-ok": try { for (const r of registrosDe(id)) await Store.remove("registros", r.id); await Store.remove("camiones", id); toast("Camión borrado"); go("flota"); } catch {} break;
-    case "borrar-ejemplos": try { for (const r of Store.registros.filter(x => x.ejemplo)) await Store.remove("registros", r.id); for (const c of Store.camiones.filter(x => x.ejemplo)) await Store.remove("camiones", c.id); toast("Ejemplos borrados"); render(); } catch {} break;
-    case "cargar-ejemplos": { const s = ejemplo(); try { for (const c of s.camiones) await Store.save("camiones", c); for (const r of s.registros) await Store.save("registros", r); toast("Ejemplo cargado"); } catch {} break; }
+    case "borrar-camion-ok": if (!soloAdmin()) break; try { for (const r of registrosDe(id)) await Store.remove("registros", r.id); await Store.remove("camiones", id); toast("Camión borrado"); go("flota"); } catch {} break;
+    case "borrar-ejemplos": if (!soloAdmin()) break; try { for (const r of Store.registros.filter(x => x.ejemplo)) await Store.remove("registros", r.id); for (const c of Store.camiones.filter(x => x.ejemplo)) await Store.remove("camiones", c.id); toast("Ejemplos borrados"); render(); } catch {} break;
+    case "cargar-ejemplos": if (!soloAdmin()) break; { const s = ejemplo(); try { for (const c of s.camiones) await Store.save("camiones", c); for (const r of s.registros) await Store.save("registros", r); toast("Ejemplo cargado"); } catch {} break; }
     case "excel": exportarExcel(); break;
+    case "admin-entrar": entrarAdmin($("#admin-pin").value); break;
+    case "admin-salir": salirAdmin(); break;
+    case "conectar": Store.conectar($("#srv-url").value); break;
     case "sync": await Store.sync(); toast(Store.pc.conectado ? "Planilla del computador sincronizada" : "No se pudo conectar con el computador"); break;
     case "respaldo": guardarArchivo(`Bitacora_Flota_respaldo_${hoy()}.json`, new Blob([JSON.stringify({ app: "bitacora-flota", version: 1, exportado: new Date().toISOString(), camiones: Store.camiones, registros: Store.registros }, null, 1)], { type: "application/json" })); break;
   }
@@ -1041,15 +1138,19 @@ document.addEventListener("submit", async e => {
   const c = camion(UI.camionId); if (!c) return;
   const km = num($("#odo-km").value), h = num($("#odo-h").value);
   if (km == null && h == null) { toast("Ingresa la lectura del odómetro."); return; }
-  if (km != null && km < (c.km || 0)) { toast(`La lectura es menor que la actual (${fmtKm(c.km)}). Revisa el número o corrige la ficha.`); return; }
-  const r = { id: uid(), creado: Date.now(), tipo: "odometro", camionId: c.id, patente: normPatente(c.patente), fecha: hoy(), km: km ?? c.km, horometro: h, responsable: sget("bf_resp") || "", estado: "Cerrado", descripcion: "" };
-  try {
-    await Store.save("registros", r);
-    await Store.save("camiones", { ...c, km: km ?? c.km, horometro: h ?? c.horometro ?? null });
-  } catch { return; }
+  if (km != null && km < (kmDe(c) ?? 0)) { toast(`La lectura es menor que la actual (${fmtKm(kmDe(c))}). Revisa el número.`); return; }
+  const r = { id: uid(), creado: Date.now(), tipo: "odometro", camionId: c.id, patente: normPatente(c.patente), fecha: hoy(), km: km ?? kmDe(c), horometro: h, responsable: sget("bf_resp") || "", estado: "Cerrado", descripcion: "" };
+  try { await Store.save("registros", r); } catch { return; }
   toast("Odómetro actualizado: " + fmtKm(r.km));
 });
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
+
+// Botón "atrás" de Android: cierra la hoja abierta o vuelve al inicio antes de salir de la app.
+window.appAtras = () => {
+  if ($("#overlay").innerHTML) { closeSheet(); return true; }
+  if (UI.view !== "inicio") { go(UI.view === "camion" || UI.view === "camion-form" ? "flota" : "inicio"); return true; }
+  return false;
+};
 
 /* ---------- Inicio ---------- */
 render();
