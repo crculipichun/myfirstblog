@@ -137,7 +137,7 @@ section { display: grid; gap: 12px; min-width: 0; }
 .pill.info { background: var(--info-bg); color: var(--info); }
 .tag { font: 700 11px/1 var(--f-mono); letter-spacing: .04em; padding: 6px 0; width: 42px; text-align: center; border-radius: 5px; flex: none; border: 1.5px solid currentColor; }
 .tag.auditoria { color: var(--info); } .tag.preventiva { color: var(--ok); } .tag.correctiva { color: var(--warn); }
-.tag.falla { color: var(--bad); } .tag.aceite { color: var(--ink); background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.tag.falla { color: var(--bad); } .tag.odometro { color: var(--muted); } .tag.aceite { color: var(--ink); background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 
 /* Items */
 .item { display: flex; gap: 12px; align-items: center; padding: 12px 14px; background: none; border: 0; width: 100%; text-align: left; cursor: pointer; }
@@ -287,8 +287,11 @@ const TIPOS = {
   preventiva: { label: "Mant. preventiva", code: "PRE", estado: "Cerrado" },
   correctiva: { label: "Mant. correctiva", code: "COR", estado: "En proceso" },
   falla:      { label: "Falla",            code: "FAL", estado: "Pendiente" },
-  aceite:     { label: "Cambio de aceite", code: "ACE", estado: "Cerrado" }
+  aceite:     { label: "Cambio de aceite", code: "ACE", estado: "Cerrado" },
+  odometro:   { label: "Lectura de odómetro", code: "ODO", estado: "Cerrado" }
 };
+const TIPOS_CAMION = ["Tracto camión", "Camión rígido", "Camión tolva", "Camión aljibe", "Camión pluma", "Furgón", "Semirremolque / rampla", "Otro"];
+const DOCS = [["vRevision", "Revisión técnica"], ["vPermiso", "Permiso de circulación"], ["vSoap", "SOAP"], ["vExtintor", "Extintor"]];
 const ESTADOS = ["Pendiente", "En proceso", "Cerrado"];
 const SISTEMAS = ["Motor", "Transmisión / Caja", "Embrague", "Frenos", "Suspensión", "Dirección", "Neumáticos", "Eléctrico", "Refrigeración", "Combustible", "Escape / DPF", "Hidráulico", "Carrocería / Cabina", "Quinta rueda / Acople", "Otro"];
 const SEVERIDADES = ["Baja", "Media", "Alta", "Crítica"];
@@ -327,9 +330,10 @@ function toast(msg) {
   clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 2800);
 }
 
-/* ---------- Almacenamiento: planilla compartida (claude db) o este teléfono (localStorage) ---------- */
+/* ---------- Almacenamiento: planilla compartida (claude db), computador de la oficina (servidor.py) o solo este teléfono ---------- */
 const Store = {
   mode: "local", camiones: [], registros: [], db: null,
+  outbox: [], pc: { conectado: false, pendiente: false, error: "", planilla: "", ultima: null }, syncing: false, again: false,
   async init() {
     let db = null;
     if (window.claude && typeof window.claude.use === "function") {
@@ -340,17 +344,67 @@ const Store = {
       const onErr = e => toast("Sin conexión con la planilla compartida (" + (e && e.code || "error") + ")");
       db.collection("camiones").onSnapshot(s => { this.camiones = s.docs.map(d => ({ ...d.data(), id: d.id })); if (!s.metadata.fromCache) UI.conectando = false; render(); }, onErr);
       db.collection("registros").onSnapshot(s => { this.registros = s.docs.map(d => ({ ...d.data(), id: d.id })); render(); }, onErr);
-    } else {
-      this.mode = "local";
-      try {
-        const raw = sget("bf_data");
-        if (raw) { const d = JSON.parse(raw); this.camiones = d.camiones || []; this.registros = d.registros || []; }
-        else if (!sget("bf_seeded")) { const s = ejemplo(); this.camiones = s.camiones; this.registros = s.registros; sset("bf_seeded", "1"); this.persist(); }
-      } catch {}
+      this.badge(); return;
     }
-    const m = $("#mode");
-    m.className = "mode " + this.mode;
-    m.textContent = this.mode === "shared" ? "Planilla compartida" : "En este teléfono";
+    this.cargarLocal();
+    const enPC = await this.pedir("GET", "api/estado").then(r => r && r.app === "bitacora-flota").catch(() => false);
+    if (enPC || sget("bf_pc") === "1") {
+      this.mode = "pc"; sset("bf_pc", "1");
+      try { this.outbox = JSON.parse(sget("bf_outbox") || "[]"); } catch { this.outbox = []; }
+      await this.sync();
+      setInterval(() => this.sync(), 30000);
+      window.addEventListener("online", () => this.sync());
+      document.addEventListener("visibilitychange", () => { if (!document.hidden) this.sync(); });
+    } else if (!sget("bf_data") && !sget("bf_seeded")) {
+      const s = ejemplo(); this.camiones = s.camiones; this.registros = s.registros; sset("bf_seeded", "1"); this.persist();
+    }
+    this.badge();
+  },
+  cargarLocal() {
+    try { const raw = sget("bf_data"); if (raw) { const d = JSON.parse(raw); this.camiones = d.camiones || []; this.registros = d.registros || []; } } catch {}
+  },
+  async pedir(method, url, body) {
+    const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 8000);
+    try {
+      const r = await fetch(url, { method, signal: ac.signal, cache: "no-store", headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return await r.json();
+    } finally { clearTimeout(t); }
+  },
+  // Envía los cambios pendientes al computador y trae la versión completa de la planilla.
+  async sync() {
+    if (this.mode !== "pc") return;
+    if (this.syncing) { this.again = true; return; }
+    this.syncing = true;
+    const enviados = this.outbox.slice();
+    try {
+      const r = await this.pedir("POST", "api/sync", { cambios: enviados });
+      this.outbox = this.outbox.slice(enviados.length);
+      const d = { camiones: [...r.datos.camiones], registros: [...r.datos.registros] };
+      for (const c of this.outbox) this.aplicar(d, c);
+      this.camiones = d.camiones; this.registros = d.registros;
+      Object.assign(this.pc, r.planilla, { conectado: true });
+      UI.conectando = false;
+    } catch { this.pc.conectado = false; }
+    sset("bf_outbox", JSON.stringify(this.outbox)); this.persist();
+    this.syncing = false; this.badge(); render();
+    if (this.again) { this.again = false; if (this.outbox.length) this.sync(); }
+  },
+  aplicar(d, c) {
+    const arr = d[c.col]; const i = arr.findIndex(x => x.id === (c.op === "set" ? c.doc.id : c.id));
+    if (c.op === "set") { if (i >= 0) arr[i] = c.doc; else arr.push(c.doc); }
+    else if (i >= 0) arr.splice(i, 1);
+  },
+  badge() {
+    const m = $("#mode"); let cls = this.mode, txt;
+    if (this.mode === "shared") txt = "Planilla compartida";
+    else if (this.mode === "pc") {
+      const n = this.outbox.length;
+      if (!this.pc.conectado) { cls = "local"; txt = n ? `Sin PC · ${n} por enviar` : "Sin conexión al PC"; }
+      else if (this.pc.pendiente) { cls = "local"; txt = "PC · cierra el Excel"; }
+      else { cls = "shared"; txt = "PC · planilla al día"; }
+    } else txt = "En este teléfono";
+    m.className = "mode " + cls; m.textContent = txt;
   },
   persist() { sset("bf_data", JSON.stringify({ camiones: this.camiones, registros: this.registros })); },
   async save(col, obj) {
@@ -360,15 +414,17 @@ const Store = {
         toast(e && e.code === "invalid_argument" ? "No tienes permiso para guardar en esta planilla." : e && e.code === "quota_exceeded" ? "La planilla está llena. Exporta y borra registros antiguos." : "No se pudo guardar. Intenta de nuevo.");
         throw e;
       }
-    } else {
-      const arr = this[col]; const i = arr.findIndex(x => x.id === obj.id);
-      if (i >= 0) arr[i] = obj; else arr.push(obj);
-      this.persist(); render();
+      return;
     }
+    this.aplicar(this, { col, op: "set", doc: obj }); this.persist();
+    if (this.mode === "pc") { this.outbox.push({ col, op: "set", doc: obj }); sset("bf_outbox", JSON.stringify(this.outbox)); this.badge(); this.sync(); }
+    render();
   },
   async remove(col, id) {
-    if (this.mode === "shared") { try { await this.db.collection(col).doc(id).delete(); } catch (e) { toast("No se pudo borrar."); throw e; } }
-    else { this[col] = this[col].filter(x => x.id !== id); this.persist(); render(); }
+    if (this.mode === "shared") { try { await this.db.collection(col).doc(id).delete(); } catch (e) { toast("No se pudo borrar."); throw e; } return; }
+    this.aplicar(this, { col, op: "delete", id }); this.persist();
+    if (this.mode === "pc") { this.outbox.push({ col, op: "delete", id }); sset("bf_outbox", JSON.stringify(this.outbox)); this.badge(); this.sync(); }
+    render();
   }
 };
 
@@ -376,9 +432,9 @@ const Store = {
 function ejemplo() {
   const d = n => { const x = new Date(); x.setDate(x.getDate() - n); return x.toISOString().slice(0, 10); };
   const c = [
-    { id: "ej-c1", patente: "KZRT41", marca: "Volvo", modelo: "FH 460", anio: 2019, km: 284500, intervalo: 15000, ejemplo: true },
-    { id: "ej-c2", patente: "LBHX27", marca: "Mercedes-Benz", modelo: "Actros 2645", anio: 2021, km: 176200, intervalo: 15000, ejemplo: true },
-    { id: "ej-c3", patente: "JWPD85", marca: "Scania", modelo: "R450", anio: 2018, km: 402900, intervalo: 12000, ejemplo: true }
+    { id: "ej-c1", patente: "KZRT41", interno: "12", tipoCamion: "Tracto camión", marca: "Volvo", modelo: "FH 460", anio: 2019, color: "Blanco", km: 284500, horometro: 9120, intervalo: 15000, conductor: "P. Rojas", faena: "Ruta Santiago–Antofagasta", vRevision: d(-120), vPermiso: d(-160), vSoap: d(-160), vExtintor: d(-20), ejemplo: true },
+    { id: "ej-c2", patente: "LBHX27", interno: "15", tipoCamion: "Tracto camión", marca: "Mercedes-Benz", modelo: "Actros 2645", anio: 2021, color: "Rojo", km: 176200, horometro: 5480, intervalo: 15000, conductor: "M. Díaz", vRevision: d(-200), vPermiso: d(-160), vSoap: d(-160), vExtintor: d(-300), ejemplo: true },
+    { id: "ej-c3", patente: "JWPD85", interno: "07", tipoCamion: "Camión tolva", marca: "Scania", modelo: "R450", anio: 2018, km: 402900, horometro: 14310, intervalo: 12000, conductor: "J. Araya", faena: "Minera, turno B", vRevision: d(5), vPermiso: d(-160), vSoap: d(-160), vExtintor: d(-90), ejemplo: true }
   ];
   const ck = Object.fromEntries(CK_ITEMS.map(([k]) => [k, "OK"]));
   const r = [
@@ -410,12 +466,19 @@ function estadoAceite(c) {
   if (restante <= 1500) return { nivel: "warn", texto: "Faltan " + fmtKm(restante), restante, pct, ultimo: u };
   return { nivel: "ok", texto: "Faltan " + fmtKm(restante), restante, pct, ultimo: u };
 }
+function estadoDoc(f) {
+  if (!f) return null;
+  const d = -diasDesde(f);
+  if (d < 0) return { nivel: "bad", texto: `Vencido el ${fmtFecha(f)}` };
+  if (d <= 30) return { nivel: "warn", texto: `Vence en ${d} día${d === 1 ? "" : "s"} (${fmtFecha(f)})` };
+  return { nivel: "ok", texto: `Vigente hasta ${fmtFecha(f)}` };
+}
 const abiertas = id => Store.registros.filter(r => (!id || r.camionId === id) && r.tipo === "falla" && r.estado !== "Cerrado");
 function estadoCamion(c) {
   const f = abiertas(c.id);
   if (f.some(x => x.detenido)) return { nivel: "bad", texto: "Detenido" };
   const a = estadoAceite(c);
-  if (f.length || a.nivel === "bad" || a.nivel === "warn") return { nivel: "warn", texto: "Revisar" };
+  if (f.length || a.nivel === "bad" || a.nivel === "warn" || DOCS.some(([k]) => estadoDoc(c[k])?.nivel === "bad")) return { nivel: "warn", texto: "Revisar" };
   return { nivel: "ok", texto: "Operativo" };
 }
 function puntaje(ck) {
@@ -430,6 +493,7 @@ function tituloRegistro(r) {
     case "correctiva": return `${r.sistema || "Correctiva"}${r.causa ? ": " + r.causa : ""}`;
     case "falla": return `Falla ${r.severidad ? r.severidad.toLowerCase() : ""} · ${r.sistema || ""}`;
     case "aceite": return `Aceite ${r.tipoAceite || ""}${r.litros ? " · " + r.litros + " L" : ""}`;
+    case "odometro": return `Lectura de odómetro${r.horometro ? " · " + miles(r.horometro) + " h" : ""}`;
   }
   return TIPOS[r.tipo]?.label || r.tipo;
 }
@@ -441,6 +505,7 @@ function alertas() {
     if (a.nivel === "info") out.push({ nivel: "info", camion: c, texto: "Sin cambio de aceite registrado", accion: { tipo: "aceite", camionId: c.id } });
     const au = ultimo(c.id, "auditoria"); const dd = au ? diasDesde(au.fecha) : null;
     if (!au || dd > 30) out.push({ nivel: "info", camion: c, texto: au ? `Última auditoría hace ${dd} días` : "Sin auditorías", accion: { tipo: "auditoria", camionId: c.id } });
+    for (const [k, l] of DOCS) { const e = estadoDoc(c[k]); if (e && e.nivel !== "ok") out.push({ nivel: e.nivel, camion: c, texto: `${l}: ${e.texto.toLowerCase()}`, editar: c.id }); }
     const pv = ultimo(c.id, "preventiva");
     if (pv && pv.proximoKm && pv.proximoKm - (c.km || 0) <= 1500 && !(a.ultimo && pv.proximoKm === a.ultimo.proximoKm))
       out.push({ nivel: pv.proximoKm <= (c.km || 0) ? "bad" : "warn", camion: c, texto: `Preventiva (${pv.servicio || "servicio"}) a los ${fmtKm(pv.proximoKm)}`, accion: { tipo: "preventiva", camionId: c.id } });
@@ -518,7 +583,7 @@ function vInicio() {
   <section><div class="spread"><h2>Requiere atención</h2><span class="muted small">${al.length} pendiente${al.length === 1 ? "" : "s"}</span></div>
     ${al.length ? `<div class="panel list">${al.slice(0, 8).map(a => `<div class="alert"><span class="sev ${a.nivel}"></span>
       <div class="body" style="flex:1;min-width:0;display:grid;gap:6px"><div class="row">${plate(a.camion.patente)}<span class="small">${esc(a.camion.marca || "")} ${esc(a.camion.modelo || "")}</span></div><span>${esc(a.texto)}</span></div>
-      ${a.registro ? `<button class="btn sm" data-act="ver-reg" data-id="${esc(a.registro)}">Ver</button>` : `<button class="btn sm" data-act="registrar" data-tipo="${a.accion.tipo}" data-camion="${esc(a.accion.camionId)}">Registrar</button>`}</div>`).join("")}</div>
+      ${a.registro ? `<button class="btn sm" data-act="ver-reg" data-id="${esc(a.registro)}">Ver</button>` : a.editar ? `<button class="btn sm" data-act="editar-camion" data-id="${esc(a.editar)}">Actualizar</button>` : `<button class="btn sm" data-act="registrar" data-tipo="${a.accion.tipo}" data-camion="${esc(a.accion.camionId)}">Registrar</button>`}</div>`).join("")}</div>
       ${al.length > 8 ? `<span class="muted small">y ${al.length - 8} más en Flota.</span>` : ""}`
     : `<div class="panel alert"><span class="sev" style="background:var(--ok)"></span><span>Todo al día. No hay fallas abiertas ni cambios de aceite por vencer.</span></div>`}
   </section>
@@ -534,7 +599,7 @@ function vFlota() {
   ${cams.length ? `<div class="panel list">${cams.map(c => {
     const a = estadoAceite(c), e = estadoCamion(c), f = abiertas(c.id).length;
     return `<button class="truck" data-act="ver-camion" data-id="${esc(c.id)}">
-      <div class="top">${plate(c.patente, true)}<div style="flex:1;min-width:0"><div style="font-weight:600">${esc(c.marca || "")} ${esc(c.modelo || "")}</div><div class="muted small"><span class="num">${fmtKm(c.km)}</span>${c.anio ? " · " + esc(c.anio) : ""}</div></div><span class="pill ${e.nivel}">${e.texto}</span></div>
+      <div class="top">${plate(c.patente, true)}<div style="flex:1;min-width:0"><div style="font-weight:600">${c.interno ? `<span class="num">#${esc(c.interno)}</span> ` : ""}${esc(c.marca || "")} ${esc(c.modelo || "")}</div><div class="muted small"><span class="num">${fmtKm(c.km)}</span>${c.anio ? " · " + esc(c.anio) : ""}${c.conductor ? " · " + esc(c.conductor) : ""}</div></div><span class="pill ${e.nivel}">${e.texto}</span></div>
       <div style="display:grid;gap:6px"><div class="spread small"><span class="muted">Aceite</span><span style="color:var(--${a.nivel === "ok" || a.nivel === "info" ? "muted" : a.nivel})">${esc(a.texto)}</span></div>
       ${a.restante != null ? `<div class="oilbar ${a.nivel}"><i style="width:${Math.round(a.pct)}%"></i></div>` : ""}
       ${f ? `<span class="small" style="color:var(--bad)">${f} falla${f > 1 ? "s" : ""} abierta${f > 1 ? "s" : ""}</span>` : ""}</div>
@@ -547,19 +612,34 @@ function vCamion() {
   const a = estadoAceite(c), e = estadoCamion(c), regs = registrosDe(c.id);
   const au = ultimo(c.id, "auditoria");
   const costo = regs.reduce((s, r) => s + (num(r.costo) || 0), 0);
+  const kv = (k, v) => v == null || v === "" ? "" : `<dt>${k}</dt><dd>${v}</dd>`;
+  const ident = kv("N° interno", esc(c.interno)) + kv("Tipo", esc(c.tipoCamion)) + kv("Año", esc(c.anio)) + kv("Color", esc(c.color)) +
+    kv("VIN / chasis", c.vin ? `<span class="num">${esc(c.vin)}</span>` : "") + kv("N° motor", c.motor ? `<span class="num">${esc(c.motor)}</span>` : "") +
+    kv("Conductor", esc(c.conductor)) + kv("Faena", esc(c.faena)) + kv("Estanque", c.estanque ? miles(c.estanque) + " L" : "") + kv("Neumáticos", esc(c.neumaticos));
   return `<div><button class="linkbtn" data-nav-link="flota">‹ Flota</button></div>
   <section><div class="row">${plate(c.patente, true)}<span class="pill ${e.nivel}">${e.texto}</span></div>
     <h1>${esc(c.marca || "")} ${esc(c.modelo || "")}</h1></section>
+  <div class="panel" style="padding:16px;display:grid;gap:14px">
+    <div class="tiles" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+      <div><span class="eyebrow">Odómetro</span><div class="num" style="font-size:22px;font-weight:700">${fmtKm(c.km)}</div></div>
+      <div><span class="eyebrow">Horómetro</span><div class="num" style="font-size:22px;font-weight:700">${c.horometro != null ? miles(c.horometro) + " h" : "—"}</div></div>
+    </div>
+    <form id="f-odo" class="grid2" style="gap:10px;align-items:end" novalidate>
+      <label class="field"><span>Nueva lectura (km)</span><input id="odo-km" name="km" type="number" inputmode="numeric" min="0" placeholder="${esc(c.km ?? "")}"></label>
+      <label class="field"><span>Horómetro (h)</span><input id="odo-h" name="horometro" type="number" inputmode="decimal" min="0" step="0.1" placeholder="${esc(c.horometro ?? "")}"></label>
+      <button class="btn primary" type="submit" style="grid-column:1/-1">Actualizar odómetro</button>
+    </form>
+  </div>
   <div class="panel" style="padding:14px"><dl class="kv">
-    <dt>Kilometraje</dt><dd class="num">${fmtKm(c.km)}</dd>
-    <dt>Año</dt><dd>${esc(c.anio || "—")}</dd>
     <dt>Aceite</dt><dd>${esc(a.texto)}${a.ultimo ? `<br><span class="muted small">Último: ${fmtFecha(a.ultimo.fecha)} a los ${fmtKm(a.ultimo.km)} · próximo ${fmtKm(a.ultimo.proximoKm)}</span>` : ""}</dd>
     <dt>Intervalo aceite</dt><dd class="num">${fmtKm(c.intervalo)}</dd>
     <dt>Última auditoría</dt><dd>${au ? `${fmtFecha(au.fecha)} · ${puntaje(au.checklist).pct}% OK` : "—"}</dd>
     <dt>Gasto registrado</dt><dd class="num">${fmtCLP(costo)}</dd>
-    ${c.notas ? `<dt>Notas</dt><dd>${esc(c.notas)}</dd>` : ""}
   </dl></div>
-  <div class="grid2"><button class="btn primary" data-act="registrar" data-camion="${esc(c.id)}">+ Registrar</button><button class="btn" data-act="editar-camion" data-id="${esc(c.id)}">Editar camión</button></div>
+  <section><h2>Vencimientos</h2><div class="panel list">${DOCS.map(([k, l]) => { const d = estadoDoc(c[k]);
+    return `<div class="alert"><span class="sev ${d ? d.nivel === "ok" ? "" : d.nivel : "info"}" style="${d && d.nivel === "ok" ? "background:var(--ok)" : ""}"></span><div style="flex:1;min-width:0"><div style="font-weight:600">${l}</div><span class="small muted">${d ? esc(d.texto) : "Sin fecha registrada"}</span></div></div>`; }).join("")}</div></section>
+  ${ident ? `<section><h2>Ficha del camión</h2><div class="panel" style="padding:14px"><dl class="kv">${ident}${kv("Notas", esc(c.notas))}</dl></div></section>` : ""}
+  <div class="grid2"><button class="btn primary" data-act="registrar" data-camion="${esc(c.id)}">+ Registrar</button><button class="btn" data-act="editar-camion" data-id="${esc(c.id)}">Editar ficha</button></div>
   <section><h2>Historial (${regs.length})</h2>
     ${regs.length ? `<div class="panel list">${regs.map(r => itemRegistro(r, false)).join("")}</div>` : `<p class="muted">Sin registros para este camión.</p>`}</section>
   <section>${UI.confirm === "camion"
@@ -567,20 +647,37 @@ function vCamion() {
     : `<button class="btn danger" data-act="borrar-camion">Borrar camión</button>`}</section>`;
 }
 
+const CAMPOS_CAMION = [
+  ["Identificación", [
+    ["patente", "Patente *", { required: true, autocapitalize: "characters", placeholder: "Ej. KZRT41" }],
+    ["interno", "N° interno / flota", { placeholder: "Ej. 14" }],
+    ["tipoCamion", "Tipo de camión", { options: TIPOS_CAMION }],
+    ["marca", "Marca", { list: "dl-marcas" }], ["modelo", "Modelo", {}],
+    ["anio", "Año", { type: "number", min: 1980, max: 2100 }], ["color", "Color", {}],
+    ["vin", "VIN / N° chasis", { autocapitalize: "characters" }], ["motor", "N° motor", { autocapitalize: "characters" }]]],
+  ["Odómetro y uso", [
+    ["km", "Odómetro (km) *", { type: "number", required: true, min: 0 }], ["horometro", "Horómetro (h)", { type: "number", min: 0, step: 0.1 }],
+    ["intervalo", "Intervalo cambio de aceite (km)", { type: "number", min: 1000, step: 500, def: 15000 }],
+    ["estanque", "Estanque combustible (L)", { type: "number", min: 0 }], ["neumaticos", "Medida neumáticos", { placeholder: "Ej. 295/80 R22.5" }]]],
+  ["Asignación", [["conductor", "Conductor asignado", {}], ["faena", "Faena / centro de costo", {}]]],
+  ["Vencimientos", DOCS.map(([k, l]) => [k, l, { type: "date" }])]
+];
+const NUM_CAMION = ["anio", "km", "horometro", "intervalo", "estanque"];
+
 function vCamionForm() {
   const c = UI.camionId ? camion(UI.camionId) || {} : {};
+  const campo = ([k, l, o]) => {
+    const val = c[k] ?? o.def ?? "";
+    const input = o.options
+      ? `<select id="cam-${k}" name="${k}"><option value="">Selecciona…</option>${o.options.map(x => `<option ${x === val ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>`
+      : `<input id="cam-${k}" name="${k}" type="${o.type || "text"}"${o.type === "number" ? ` inputmode="${o.step && o.step < 1 ? "decimal" : "numeric"}"` : ""}${o.required ? " required" : ""}${o.min != null ? ` min="${o.min}"` : ""}${o.max != null ? ` max="${o.max}"` : ""}${o.step ? ` step="${o.step}"` : ""}${o.list ? ` list="${o.list}"` : ""}${o.autocapitalize ? ` autocapitalize="${o.autocapitalize}" autocomplete="off"` : ""}${o.placeholder ? ` placeholder="${esc(o.placeholder)}"` : ""} value="${esc(val)}">`;
+    return `<label class="field"><span>${l}</span>${input}</label>`;
+  };
   return `<div><button class="linkbtn" data-act="volver-camion">‹ Volver</button></div>
-  <h1>${c.id ? "Editar camión" : "Nuevo camión"}</h1>
-  <form id="f-cam" class="panel" style="padding:16px" novalidate>
-    <label class="field"><span>Patente *</span><input id="cam-patente" name="patente" required autocapitalize="characters" autocomplete="off" placeholder="Ej. KZRT41" value="${esc(c.patente || "")}"></label>
-    <div class="grid2">
-      <label class="field"><span>Marca</span><input id="cam-marca" name="marca" list="dl-marcas" value="${esc(c.marca || "")}"></label>
-      <label class="field"><span>Modelo</span><input id="cam-modelo" name="modelo" value="${esc(c.modelo || "")}"></label>
-      <label class="field"><span>Año</span><input id="cam-anio" name="anio" type="number" inputmode="numeric" min="1980" max="2100" value="${esc(c.anio || "")}"></label>
-      <label class="field"><span>Kilometraje actual *</span><input id="cam-km" name="km" type="number" inputmode="numeric" min="0" required value="${esc(c.km ?? "")}"></label>
-    </div>
-    <label class="field"><span>Intervalo cambio de aceite (km)</span><input id="cam-intervalo" name="intervalo" type="number" inputmode="numeric" min="1000" step="500" value="${esc(c.intervalo || 15000)}"></label>
-    <label class="field"><span>Notas</span><textarea id="cam-notas" name="notas" placeholder="Conductor asignado, faena, observaciones…">${esc(c.notas || "")}</textarea></label>
+  <h1>${c.id ? "Editar ficha" : "Nuevo camión"}</h1>
+  <form id="f-cam" novalidate>
+    ${CAMPOS_CAMION.map(([g, cs]) => `<div class="panel" style="padding:16px;display:grid;gap:14px"><h3>${g}</h3><div class="grid2">${cs.map(campo).join("")}</div></div>`).join("")}
+    <div class="panel" style="padding:16px"><label class="field"><span>Notas</span><textarea id="cam-notas" name="notas" placeholder="Observaciones generales del camión">${esc(c.notas || "")}</textarea></label></div>
     <datalist id="dl-marcas">${["Volvo", "Scania", "Mercedes-Benz", "Freightliner", "International", "Kenworth", "Iveco", "MAN", "Hino", "Mack", "Foton", "JAC"].map(m => `<option value="${m}">`).join("")}</datalist>
     <button class="btn primary block" type="submit">Guardar camión</button>
   </form>`;
@@ -603,7 +700,7 @@ function vNuevo() {
       </select></label>
       <div class="grid2">
         <label class="field"><span>Fecha *</span><input id="reg-fecha" name="fecha" type="date" required value="${esc(v.fecha || hoy())}"></label>
-        <label class="field"><span>Kilometraje *</span><input id="reg-km" name="km" type="number" inputmode="numeric" min="0" required value="${esc(v.km ?? (c ? c.km : ""))}" placeholder="${c ? esc(c.km) : ""}"></label>
+        <label class="field"><span>Odómetro (km) *</span><input id="reg-km" name="km" type="number" inputmode="numeric" min="0" required value="${esc(v.km ?? (c ? c.km : ""))}" placeholder="${c ? esc(c.km) : ""}"></label>
       </div>
       <div class="grid2">
         <label class="field"><span>${tipo === "falla" ? "Reportado por" : tipo === "auditoria" ? "Auditor" : "Responsable"}</span><input id="reg-resp" name="responsable" value="${esc(v.responsable ?? sget("bf_resp") ?? "")}" autocomplete="name"></label>
@@ -613,7 +710,7 @@ function vNuevo() {
     ${seccionTipo(tipo, v, c)}
     <div class="panel" style="padding:16px;display:grid;gap:16px">
       <label class="field"><span>${tipo === "falla" ? "Descripción de la falla" : "Observaciones"}</span><textarea id="reg-desc" name="descripcion" placeholder="${tipo === "falla" ? "Qué pasó, cuándo y cómo se detectó" : "Detalle del trabajo u observaciones"}">${esc(v.descripcion || "")}</textarea></label>
-      ${tipo === "auditoria" || tipo === "falla" ? "" : `<label class="field"><span>Costo (CLP)</span><input id="reg-costo" name="costo" type="number" inputmode="numeric" min="0" step="1" value="${esc(v.costo ?? "")}" placeholder="0"></label>`}
+      ${["auditoria", "falla", "odometro"].includes(tipo) ? "" : `<label class="field"><span>Costo (CLP)</span><input id="reg-costo" name="costo" type="number" inputmode="numeric" min="0" step="1" value="${esc(v.costo ?? "")}" placeholder="0"></label>`}
     </div>
     <div class="grid2"><button type="button" class="btn" data-act="${editing ? "cancelar-edicion" : "limpiar"}">${editing ? "Cancelar" : "Limpiar"}</button><button class="btn primary" type="submit">Guardar registro</button></div>
   </form>`;
@@ -644,6 +741,8 @@ function seccionTipo(tipo, v, c) {
     <div class="grid2"><label class="field"><span>Sistema *</span>${sel("reg-sistema", "sistema", SISTEMAS, v.sistema, true)}</label>
     <label class="field"><span>Severidad *</span>${sel("reg-sev", "severidad", SEVERIDADES, v.severidad, true)}</label></div>
     <label class="check"><input type="checkbox" id="reg-detenido" name="detenido" ${v.detenido ? "checked" : ""}> Camión detenido (fuera de servicio)</label></div>`;
+  if (tipo === "odometro") return `<div class="fieldset">
+    <label class="field"><span>Horómetro (h)</span><input id="reg-horometro" name="horometro" type="number" inputmode="decimal" step="0.1" min="0" value="${esc(v.horometro ?? (c && c.horometro != null ? c.horometro : ""))}"></label></div>`;
   if (tipo === "aceite") {
     const km = num(v.km ?? (c ? c.km : null)); const prox = v.proximoKm ?? (km != null && c ? km + (c.intervalo || 15000) : "");
     return `<div class="fieldset">
@@ -694,7 +793,8 @@ async function guardarRegistro(e) {
   if (v.tipo === "aceite" && !v.tipoAceite) falta.push("tipo de aceite");
   if (v.tipo === "auditoria" && puntaje(v.checklist).total === 0) falta.push("al menos un punto del checklist");
   if (falta.length) { toast("Falta completar: " + falta.join(", ")); return; }
-  const r = { ...v, id: v.id || uid(), creado: v.creado || Date.now(), km: num(v.km), costo: num(v.costo), litros: num(v.litros), horas: num(v.horas), proximoKm: num(v.proximoKm), patente: normPatente(c.patente) };
+  if (v.tipo === "odometro" && !v.id && num(v.km) < (c.km || 0)) { toast(`La lectura es menor que el odómetro actual (${fmtKm(c.km)}).`); return; }
+  const r = { ...v, id: v.id || uid(), creado: v.creado || Date.now(), km: num(v.km), costo: num(v.costo), litros: num(v.litros), horas: num(v.horas), horometro: num(v.horometro), proximoKm: num(v.proximoKm), patente: normPatente(c.patente) };
   if (r.estado === "Cerrado" && !r.cerrado) r.cerrado = hoy();
   if (r.estado !== "Cerrado") delete r.cerrado;
   delete r.ejemplo;
@@ -702,7 +802,8 @@ async function guardarRegistro(e) {
   if (r.responsable) sset("bf_resp", r.responsable);
   try {
     await Store.save("registros", r);
-    if (r.km != null && r.km > (c.km || 0)) await Store.save("camiones", { ...c, km: r.km });
+    const kmNuevo = r.km != null && r.km > (c.km || 0), hNuevo = r.horometro != null && r.horometro > (c.horometro || 0);
+    if (kmNuevo || hNuevo) await Store.save("camiones", { ...c, km: kmNuevo ? r.km : c.km, horometro: hNuevo ? r.horometro : (c.horometro ?? null) });
   } catch { return; }
   UI.form = null; toast(v.id ? "Registro actualizado" : "Registro guardado");
   go("camion", { camionId: c.id });
@@ -710,16 +811,18 @@ async function guardarRegistro(e) {
 
 function wireCamionForm() {
   const f = $("#f-cam"); if (!f) return;
-  const p = $("#cam-patente"); p.addEventListener("input", () => { const pos = p.selectionStart; p.value = p.value.toUpperCase(); p.setSelectionRange(pos, pos); });
+  ["#cam-patente", "#cam-vin", "#cam-motor"].forEach(sel => { const p = $(sel); p.addEventListener("input", () => { const pos = p.selectionStart; p.value = p.value.toUpperCase(); p.setSelectionRange(pos, pos); }); });
   f.addEventListener("submit", async e => {
     e.preventDefault();
     const fd = Object.fromEntries(new FormData(f).entries());
     const pat = normPatente(fd.patente);
     if (pat.length < 5) { toast("Ingresa una patente válida (ej. KZRT41)."); return; }
-    if (num(fd.km) == null) { toast("Ingresa el kilometraje actual."); return; }
+    if (num(fd.km) == null) { toast("Ingresa el odómetro actual (km)."); return; }
     const prev = UI.camionId ? camion(UI.camionId) : null;
     if (Store.camiones.some(x => normPatente(x.patente) === pat && (!prev || x.id !== prev.id))) { toast("Ya existe un camión con la patente " + fmtPatente(pat) + "."); return; }
-    const c = { ...(prev || {}), id: prev ? prev.id : uid(), patente: pat, marca: fd.marca.trim(), modelo: fd.modelo.trim(), anio: num(fd.anio), km: num(fd.km), intervalo: num(fd.intervalo) || 15000, notas: fd.notas.trim(), creado: prev?.creado || Date.now() };
+    const c = { ...(prev || {}), id: prev ? prev.id : uid(), creado: prev?.creado || Date.now() };
+    for (const [k, v] of Object.entries(fd)) c[k] = NUM_CAMION.includes(k) ? num(v) : String(v).trim();
+    c.patente = pat; c.intervalo = c.intervalo || 15000;
     delete c.ejemplo;
     try { await Store.save("camiones", c); } catch { return; }
     toast(prev ? "Camión actualizado" : "Camión agregado"); go("camion", { camionId: c.id });
@@ -743,8 +846,17 @@ function vHistorial() {
 
 function vPlanilla() {
   const n = t => Store.registros.filter(r => r.tipo === t).length;
-  return `<section><h1>Planilla Excel</h1>
-    <p class="muted" style="margin:0">Descarga toda la información en un archivo .xlsx con una hoja por tipo de registro. Cada hoja trae filtros listos para ordenar por patente, fecha o estado.</p></section>
+  const P = Store.pc;
+  const pcPanel = Store.mode !== "pc" ? "" : `<div class="panel" style="padding:16px;display:grid;gap:10px">
+    <div class="spread"><h3>Planilla en el computador</h3><span class="pill ${!P.conectado ? "warn" : P.pendiente ? "warn" : "ok"}">${!P.conectado ? "Sin conexión" : P.pendiente ? "Excel abierto" : "Al día"}</span></div>
+    ${P.planilla ? `<span class="num small" style="overflow-wrap:anywhere">${esc(P.planilla)}</span>` : ""}
+    <span class="small muted">${!P.conectado
+      ? `No se pudo conectar con el computador. ${Store.outbox.length ? `${Store.outbox.length} cambio${Store.outbox.length === 1 ? "" : "s"} esperando; se enviarán solos al volver a la red del computador.` : "Los registros nuevos quedarán guardados en este teléfono hasta reconectar."}`
+      : P.pendiente ? esc(P.error || "La planilla está abierta en Excel. Ciérrala en el computador y se actualizará sola.")
+      : `Cada registro se agrega solo a la planilla.${P.ultima ? " Última actualización: " + esc(P.ultima.replace("T", " ")) : ""}`}</span>
+    <button class="btn" data-act="sync">Enviar ahora</button></div>`;
+  return `${pcPanel}<section><h1>Planilla Excel</h1>
+    <p class="muted" style="margin:0">${Store.mode === "pc" ? "También puedes descargar una copia en este teléfono:" : "Descarga toda la información en"} un archivo .xlsx con una hoja por tipo de registro. Cada hoja trae filtros listos para ordenar por patente, fecha o estado.</p></section>
   <div class="panel" style="padding:16px;display:grid;gap:14px">
     <ul class="sheetlist">
       <li><span class="xl">XLS</span>Flota <span class="muted small">· ${Store.camiones.length} camiones, estado de aceite y fallas</span></li>
@@ -753,12 +865,15 @@ function vPlanilla() {
       <li><span class="xl">XLS</span>Correctivas <span class="muted small">· ${n("correctiva")}</span></li>
       <li><span class="xl">XLS</span>Fallas <span class="muted small">· ${n("falla")}</span></li>
       <li><span class="xl">XLS</span>Cambios de aceite <span class="muted small">· ${n("aceite")}</span></li>
+      <li><span class="xl">XLS</span>Odómetro <span class="muted small">· ${n("odometro")} lecturas</span></li>
       <li><span class="xl">XLS</span>Todos los registros <span class="muted small">· ${Store.registros.length}</span></li>
     </ul>
     <button class="btn primary block" data-act="excel">Descargar planilla Excel</button>
   </div>
   <section><h2>Dónde se guardan los datos</h2>
-    <p class="muted" style="margin:0">${Store.mode === "shared"
+    <p class="muted" style="margin:0">${Store.mode === "pc"
+      ? "Los registros se guardan en la planilla Excel del computador. Si no hay señal o Wi-Fi, quedan en este teléfono y se envían solos al reconectar."
+      : Store.mode === "shared"
       ? "Los registros se guardan en la planilla compartida de esta página. Todas las personas con acceso ven y agregan a los mismos datos, desde cualquier teléfono."
       : "Los registros se guardan en este teléfono, incluso sin internet. Descarga la planilla o un respaldo con frecuencia: si borras los datos del navegador se pierden."}</p>
   </section>
@@ -784,12 +899,13 @@ function verRegistro(id) {
   if (r.tipo === "preventiva") extra = kv("Servicio", esc(r.servicio)) + kv("Repuestos", esc(r.repuestos)) + kv("Próximo", r.proximoKm ? fmtKm(r.proximoKm) : "") + kv("Próxima fecha", r.proximaFecha ? fmtFecha(r.proximaFecha) : "");
   if (r.tipo === "correctiva") extra = kv("Sistema", esc(r.sistema)) + kv("Causa", esc(r.causa)) + kv("Repuestos", esc(r.repuestos)) + kv("Horas taller", r.horas ?? "") + kv("Taller", esc(r.taller));
   if (r.tipo === "falla") extra = kv("Sistema", esc(r.sistema)) + kv("Severidad", esc(r.severidad)) + kv("Camión detenido", r.detenido ? "Sí" : "No");
+  if (r.tipo === "odometro") extra = kv("Horómetro", r.horometro != null ? miles(r.horometro) + " h" : "");
   if (r.tipo === "aceite") extra = kv("Aceite", esc(r.tipoAceite)) + kv("Litros", r.litros ?? "") + kv("Filtros", FILTROS.filter(([k]) => r[k]).map(([, l]) => l).join(", ") || "Ninguno") + kv("Próximo cambio", fmtKm(r.proximoKm));
   const sheet = `<div class="backdrop" data-act="cerrar"><div class="sheet" role="dialog" aria-modal="true" aria-label="Detalle del registro">
     <div class="spread"><div class="row"><span class="tag ${esc(r.tipo)}">${TIPOS[r.tipo]?.code}</span><span class="eyebrow">${esc(TIPOS[r.tipo]?.label)}</span></div><button class="btn sm" data-act="cerrar">Cerrar</button></div>
     <h3>${esc(tituloRegistro(r))}</h3>
     ${c ? `<div class="row">${plate(c.patente)}<span class="small">${esc(c.marca || "")} ${esc(c.modelo || "")}</span></div>` : ""}
-    <dl class="kv">${kv("Fecha", fmtFecha(r.fecha))}${kv("Kilometraje", `<span class="num">${fmtKm(r.km)}</span>`)}${kv(r.tipo === "falla" ? "Reportado por" : "Responsable", esc(r.responsable))}${extra}${kv("Costo", r.costo ? fmtCLP(r.costo) : "")}${kv("Observaciones", esc(r.descripcion))}${kv("Cerrado el", r.cerrado ? fmtFecha(r.cerrado) : "")}</dl>
+    <dl class="kv">${kv("Fecha", fmtFecha(r.fecha))}${kv("Odómetro", `<span class="num">${fmtKm(r.km)}</span>`)}${kv(r.tipo === "falla" ? "Reportado por" : "Responsable", esc(r.responsable))}${extra}${kv("Costo", r.costo ? fmtCLP(r.costo) : "")}${kv("Observaciones", esc(r.descripcion))}${kv("Cerrado el", r.cerrado ? fmtFecha(r.cerrado) : "")}</dl>
     <div class="field"><span>Estado</span><div class="chips">${ESTADOS.map(s => `<button class="chip" data-act="estado" data-id="${esc(r.id)}" data-estado="${s}" aria-pressed="${r.estado === s}">${s}</button>`).join("")}</div></div>
     <div class="grid2"><button class="btn" data-act="editar-reg" data-id="${esc(r.id)}">Editar</button><button class="btn danger" data-act="borrar-reg" data-id="${esc(r.id)}">Borrar</button></div>
     <div id="confirm-reg"></div>
@@ -827,10 +943,12 @@ async function exportarExcel() {
   const sn = b => b ? "Sí" : "No";
   const wb = XLSX.utils.book_new();
 
-  const flotaH = ["Patente", "Marca", "Modelo", "Año", "Km actual", "Intervalo aceite (km)", "Último cambio aceite", "Km último cambio", "Próximo cambio (km)", "Km restantes", "Estado aceite", "Fallas abiertas", "Última auditoría", "% OK última auditoría", "Estado", "Notas"];
+  const flotaH = ["Patente", "N° interno", "Tipo", "Marca", "Modelo", "Año", "Color", "VIN / N° chasis", "N° motor", "Odómetro (km)", "Horómetro (h)", "Conductor", "Faena / centro de costo", "Intervalo aceite (km)", "Último cambio aceite", "Km último cambio", "Próximo cambio (km)", "Km restantes", "Estado aceite", "Fallas abiertas", "Última auditoría", "% OK última auditoría", ...DOCS.map(([, l]) => "Vence " + l), "Estanque (L)", "Neumáticos", "Estado", "Notas"];
   XLSX.utils.book_append_sheet(wb, hoja(Store.camiones.map(c => {
     const a = estadoAceite(c), au = ultimo(c.id, "auditoria");
-    return { "Patente": fmtPatente(c.patente), "Marca": c.marca, "Modelo": c.modelo, "Año": c.anio, "Km actual": c.km, "Intervalo aceite (km)": c.intervalo,
+    return { "Patente": fmtPatente(c.patente), "N° interno": c.interno || "", "Tipo": c.tipoCamion || "", "Marca": c.marca, "Modelo": c.modelo, "Año": c.anio, "Color": c.color || "", "VIN / N° chasis": c.vin || "", "N° motor": c.motor || "",
+      "Odómetro (km)": c.km, "Horómetro (h)": c.horometro ?? "", "Conductor": c.conductor || "", "Faena / centro de costo": c.faena || "", "Intervalo aceite (km)": c.intervalo,
+      ...Object.fromEntries(DOCS.map(([k, l]) => ["Vence " + l, c[k] || ""])), "Estanque (L)": c.estanque ?? "", "Neumáticos": c.neumaticos || "",
       "Último cambio aceite": a.ultimo?.fecha || "", "Km último cambio": a.ultimo?.km ?? "", "Próximo cambio (km)": a.ultimo?.proximoKm ?? "", "Km restantes": a.restante ?? "",
       "Estado aceite": a.nivel === "bad" ? "Vencido" : a.nivel === "warn" ? "Por vencer" : a.nivel === "ok" ? "Al día" : "Sin registro",
       "Fallas abiertas": abiertas(c.id).length, "Última auditoría": au?.fecha || "", "% OK última auditoría": au ? puntaje(au.checklist).pct : "", "Estado": estadoCamion(c).texto, "Notas": c.notas || "" };
@@ -853,6 +971,9 @@ async function exportarExcel() {
 
   const aceH = ["Fecha", "Patente", "Km", "Responsable", "Aceite", "Litros", ...FILTROS.map(([, l]) => l), "Próximo cambio (km)", "Costo CLP", "Observaciones"];
   XLSX.utils.book_append_sheet(wb, hoja(regs.filter(r => r.tipo === "aceite").map(r => ({ ...base(r), "Responsable": r.responsable, "Aceite": r.tipoAceite, "Litros": r.litros ?? "", ...Object.fromEntries(FILTROS.map(([k, l]) => [l, sn(r[k])])), "Próximo cambio (km)": r.proximoKm ?? "", "Costo CLP": r.costo ?? "", "Observaciones": r.descripcion })), aceH), "Cambios de aceite");
+
+  const odoH = ["Fecha", "Patente", "Km", "Horómetro (h)", "Responsable", "Observaciones"];
+  XLSX.utils.book_append_sheet(wb, hoja(regs.filter(r => r.tipo === "odometro").map(r => ({ ...base(r), "Horómetro (h)": r.horometro ?? "", "Responsable": r.responsable, "Observaciones": r.descripcion })), odoH), "Odómetro");
 
   const allH = ["Fecha", "Tipo", "Patente", "Km", "Responsable", "Detalle", "Estado", "Costo CLP", "Observaciones"];
   XLSX.utils.book_append_sheet(wb, hoja(regs.map(r => ({ "Fecha": r.fecha, "Tipo": TIPOS[r.tipo]?.label, "Patente": pat(r), "Km": r.km, "Responsable": r.responsable, "Detalle": tituloRegistro(r), "Estado": r.estado, "Costo CLP": r.costo ?? "", "Observaciones": r.descripcion })), allH), "Todos los registros");
@@ -903,6 +1024,7 @@ document.addEventListener("click", async e => {
     case "borrar-ejemplos": try { for (const r of Store.registros.filter(x => x.ejemplo)) await Store.remove("registros", r.id); for (const c of Store.camiones.filter(x => x.ejemplo)) await Store.remove("camiones", c.id); toast("Ejemplos borrados"); render(); } catch {} break;
     case "cargar-ejemplos": { const s = ejemplo(); try { for (const c of s.camiones) await Store.save("camiones", c); for (const r of s.registros) await Store.save("registros", r); toast("Ejemplo cargado"); } catch {} break; }
     case "excel": exportarExcel(); break;
+    case "sync": await Store.sync(); toast(Store.pc.conectado ? "Planilla del computador sincronizada" : "No se pudo conectar con el computador"); break;
     case "respaldo": guardarArchivo(`Bitacora_Flota_respaldo_${hoy()}.json`, new Blob([JSON.stringify({ app: "bitacora-flota", version: 1, exportado: new Date().toISOString(), camiones: Store.camiones, registros: Store.registros }, null, 1)], { type: "application/json" })); break;
   }
 });
@@ -913,6 +1035,20 @@ document.addEventListener("input", e => {
   else render();
 });
 document.addEventListener("change", e => { if (e.target.id === "imp-json" && e.target.files[0]) { importarJSON(e.target.files[0]); e.target.value = ""; } });
+document.addEventListener("submit", async e => {
+  if (e.target.id !== "f-odo") return;
+  e.preventDefault();
+  const c = camion(UI.camionId); if (!c) return;
+  const km = num($("#odo-km").value), h = num($("#odo-h").value);
+  if (km == null && h == null) { toast("Ingresa la lectura del odómetro."); return; }
+  if (km != null && km < (c.km || 0)) { toast(`La lectura es menor que la actual (${fmtKm(c.km)}). Revisa el número o corrige la ficha.`); return; }
+  const r = { id: uid(), creado: Date.now(), tipo: "odometro", camionId: c.id, patente: normPatente(c.patente), fecha: hoy(), km: km ?? c.km, horometro: h, responsable: sget("bf_resp") || "", estado: "Cerrado", descripcion: "" };
+  try {
+    await Store.save("registros", r);
+    await Store.save("camiones", { ...c, km: km ?? c.km, horometro: h ?? c.horometro ?? null });
+  } catch { return; }
+  toast("Odómetro actualizado: " + fmtKm(r.km));
+});
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
 
 /* ---------- Inicio ---------- */
