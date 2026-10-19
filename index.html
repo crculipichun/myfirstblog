@@ -401,10 +401,23 @@ const Store = {
   base() { return sget("bf_server") || SERVIDOR_FIJO || (EN_APK ? null : ""); },
   url(p) { return (this.base() || "") + p; },
   esGoogle(b = this.base()) { return /^https:\/\/script\.google\.com\//.test(b || ""); },
+  // Las cuentas de Google Workspace entregan el link con el dominio (/a/empresa.cl/macros/s/ID/exec);
+  // si ese no responde se prueba la forma general (/macros/s/ID/exec), que sirve para cualquier usuario.
+  googleAlterna(u) {
+    const m = /^https:\/\/script\.google\.com\/a\/(?:macros\/)?[^/]+\/(?:macros\/)?s\/([^/]+)\/exec/.exec(u || "");
+    return m ? `https://script.google.com/macros/s/${m[1]}/exec` : null;
+  },
   // Google Apps Script recibe todo por POST en una sola dirección; servidor.py usa una ruta por acción.
   async api(accion, cuerpo = {}, base = this.base()) {
     if (this.esGoogle(base)) {
-      const r = await this.pedir("POST", base, { accion, codigo: codigoAcceso(), ...cuerpo }, true);
+      const cuerpoG = { accion, codigo: codigoAcceso(), ...cuerpo };
+      let r;
+      try { r = await this.pedir("POST", base, cuerpoG, true); }
+      catch (e) {
+        const alt = this.googleAlterna(base); if (!alt) throw e;
+        r = await this.pedir("POST", alt, cuerpoG, true);
+        if (base === this.base()) sset("bf_server", alt);
+      }
       if (r && r.error === "codigo") { const e = new Error("codigo"); e.status = 401; throw e; }
       return r;
     }
