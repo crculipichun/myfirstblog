@@ -353,6 +353,8 @@ const EN_APK = location.protocol === "file:";
 // El APK de la empresa se construye con la dirección de la planilla y el código ya puestos (ver android/construir-apk.sh)
 const SERVIDOR_FIJO = "", CODIGO_FIJO = "";
 const codigoAcceso = () => sget("bf_codigo") || CODIGO_FIJO;
+// Un APK nuevo con otra dirección fija reemplaza la que haya quedado guardada de una versión anterior
+if (SERVIDOR_FIJO && sget("bf_fijo") !== SERVIDOR_FIJO) { sset("bf_server", SERVIDOR_FIJO); if (CODIGO_FIJO) sset("bf_codigo", CODIGO_FIJO); sset("bf_fijo", SERVIDOR_FIJO); }
 // El link para los celulares trae el código de acceso (?c=ABC123) y, si los datos van a Google, la dirección de la planilla (?u=...)
 (() => { try {
   const q = new URLSearchParams(location.search), c = q.get("c"), u = q.get("u");
@@ -448,8 +450,9 @@ const Store = {
       if (local && !/:\d+(\/|$)/.test(u.replace(/^https?:\/\//i, ""))) u = u.replace(/\/*$/, "") + ":8080";
       u = u.replace(/\/*$/, "/");
     }
-    const r = await this.api("estado", {}, u).catch(() => null);
-    if (!r || r.app !== "bitacora-flota") { toast("No se pudo conectar con " + u + ". Revisa que el link esté completo y que el celular tenga internet."); return; }
+    let r = null, err = null;
+    try { r = await this.api("estado", {}, u); } catch (e) { err = e; }
+    if (!r || r.app !== "bitacora-flota") { this.pc.ultimoError = explicarError(err); render(); toast("No se pudo conectar. " + this.pc.ultimoError); return; }
     if (!r.codigoOk) { this.pc.codigoMal = true; this.badge(); render(); toast("El código de acceso no es correcto. Revísalo en la planilla (hoja Configuración)."); return; }
     const antes = this.mode;
     sset("bf_server", u); this.iniciarPC();
@@ -477,7 +480,13 @@ const Store = {
       if (body && !simple) headers["Content-Type"] = "application/json";
       const r = await fetch(url, { method, signal: ac.signal, cache: "no-store", headers, body: body ? JSON.stringify(body) : undefined });
       if (!r.ok) { const e = new Error("HTTP " + r.status); e.status = r.status; throw e; }
-      return await r.json();
+      const texto = await r.text();
+      try { return JSON.parse(texto); }
+      catch {
+        const e = new Error("respuesta no es JSON");
+        e.motivo = /accounts\.google|ServiceLogin|Iniciar sesi|Sign in/i.test(texto) ? "login" : /no se pudo abrir|unable to open|not found|no se encontr/i.test(texto) ? "noexiste" : "html";
+        throw e;
+      }
     } finally { clearTimeout(t); }
   },
   // Envía los cambios pendientes a la planilla y trae su versión completa.
@@ -494,9 +503,9 @@ const Store = {
       const d = { camiones: [...r.datos.camiones], registros: [...r.datos.registros] };
       for (const c of this.outbox) this.aplicar(d, c);
       this.camiones = d.camiones; this.registros = d.registros;
-      Object.assign(this.pc, r.planilla, { conectado: true, codigoMal: false });
+      Object.assign(this.pc, r.planilla, { conectado: true, codigoMal: false, ultimoError: "" });
       UI.conectando = false;
-    } catch (e) { this.pc.conectado = false; if (e && e.status === 401) this.pc.codigoMal = true; }
+    } catch (e) { this.pc.conectado = false; if (e && e.status === 401) this.pc.codigoMal = true; else this.pc.ultimoError = explicarError(e); }
     sset("bf_outbox", JSON.stringify(this.outbox)); this.persist();
     this.syncing = false; this.badge(); render();
     if (this.again) { this.again = false; if (this.outbox.length) this.sync(); }
@@ -539,6 +548,20 @@ const Store = {
     render();
   }
 };
+
+// Traduce por qué no se pudo hablar con la planilla, para que se pueda corregir
+function explicarError(e) {
+  const m = e && (e.motivo || (e.name === "AbortError" ? "tiempo" : e.name === "TypeError" ? "red" : e.status === 404 ? "noexiste" : e.status ? "http" : ""));
+  const g = Store.esGoogle();
+  return ({
+    login: "Google pidió iniciar sesión. En Apps Script → Implementar → Administrar implementaciones, «Quién tiene acceso» debe ser «Cualquier usuario».",
+    noexiste: "Google no encontró el script. Revisa que el link esté copiado completo, sin cambiar letras.",
+    html: "Google respondió una página en vez de datos. Revisa el link y que el script esté implementado como aplicación web.",
+    red: g ? "No llegó respuesta de Google. Pasa cuando no hay señal, cuando el link tiene una letra distinta, o cuando «Quién tiene acceso» no es «Cualquier usuario»." : "No llegó respuesta. Revisa la señal y que el programa esté abierto en el computador.",
+    tiempo: "La planilla tardó demasiado en responder. Intenta de nuevo.",
+    http: "La planilla respondió con error " + (e && e.status) + "."
+  })[m] || ("Error: " + (e && e.message || "desconocido"));
+}
 
 /* ---------- Administrador: solo él agrega, edita y borra camiones ---------- */
 function soloAdmin() {
@@ -999,7 +1022,7 @@ function tarjetasConexion() {
     <div class="spread"><h3>${G ? "Planilla en Google Drive" : "Planilla en el computador"}</h3><span class="pill ${!P.conectado ? "warn" : P.pendiente ? "warn" : "ok"}">${!P.conectado ? "Sin conexión" : P.pendiente ? "Excel abierto" : "Al día"}</span></div>
     ${!P.planilla ? "" : G ? (UI.admin ? `<a class="btn" href="${esc(P.planilla)}" target="_blank" rel="noopener">Abrir la planilla</a>` : "") : `<span class="num small" style="overflow-wrap:anywhere">${esc(P.planilla)}</span>`}
     <span class="small muted">${!P.conectado
-      ? `No se pudo conectar con la planilla. ${Store.outbox.length ? `${Store.outbox.length} cambio${Store.outbox.length === 1 ? "" : "s"} esperando; se enviarán solos cuando haya conexión.` : "Los registros nuevos quedarán guardados en este teléfono hasta reconectar."} ${G ? "Revisa que el celular tenga internet." : "Revisa que el celular tenga internet y que el programa esté abierto en el computador."}`
+      ? `<b>No se pudo conectar con la planilla.</b> ${P.ultimoError ? esc(P.ultimoError) + " " : ""}${Store.outbox.length ? `${Store.outbox.length} cambio${Store.outbox.length === 1 ? "" : "s"} esperando; se enviarán solos cuando haya conexión.` : "Los registros nuevos quedarán guardados en este teléfono hasta reconectar."} ${G ? "Revisa que el celular tenga internet." : "Revisa que el celular tenga internet y que el programa esté abierto en el computador."}`
       : P.pendiente ? esc(P.error || "La planilla está abierta en Excel. Ciérrala en el computador y se actualizará sola.")
       : `Cada registro se agrega solo a la planilla.${P.ultima ? " Última actualización: " + esc(P.ultima.replace("T", " ")) : ""}`}</span>
     <button class="btn" data-act="sync">Enviar ahora</button></div>`;
