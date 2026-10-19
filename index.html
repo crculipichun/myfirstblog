@@ -1,0 +1,927 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#16202b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bitácora Flota">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+</head>
+<body>
+<!--APP-START-->
+<title>Bitácora de Flota</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: una columna tipo app (máx. 640px), cabecera fija arriba, barra de pestañas abajo. Neutros pizarra, acento amarillo alta visibilidad. */
+:root {
+  --bg: #eceff3;
+  --surface: #ffffff;
+  --surface-2: #f5f7f9;
+  --ink: #16202b;
+  --muted: #5a6776;
+  --line: #d3dae2;
+  --accent: #f2a900;
+  --accent-ink: #1d1500;
+  --bar: #16202b;
+  --bar-ink: #e9eef3;
+  --bar-muted: #93a1b1;
+  --ok: #1d7f47;
+  --ok-bg: #e2f3e9;
+  --warn: #9a5c00;
+  --warn-bg: #fdf0d6;
+  --bad: #b8282a;
+  --bad-bg: #fbe3e2;
+  --info: #2b5c8f;
+  --info-bg: #e2ecf6;
+  --plate-bg: #ffffff;
+  --plate-ink: #111111;
+  --shadow: 0 1px 2px rgba(22,32,43,.08), 0 2px 8px rgba(22,32,43,.06);
+  --f-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --nav-h: 64px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141b; --surface: #17202a; --surface-2: #1d2833; --ink: #e6ecf2; --muted: #95a3b3; --line: #2a3643;
+    --accent: #ffb81c; --accent-ink: #1d1500; --bar: #0a0f15; --bar-ink: #e6ecf2; --bar-muted: #8494a6;
+    --ok: #4cc785; --ok-bg: #12301f; --warn: #f2ab45; --warn-bg: #352610; --bad: #f2716d; --bad-bg: #3a1716;
+    --info: #7db3ea; --info-bg: #142a40; --shadow: 0 1px 2px rgba(0,0,0,.4);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141b; --surface: #17202a; --surface-2: #1d2833; --ink: #e6ecf2; --muted: #95a3b3; --line: #2a3643;
+  --accent: #ffb81c; --accent-ink: #1d1500; --bar: #0a0f15; --bar-ink: #e6ecf2; --bar-muted: #8494a6;
+  --ok: #4cc785; --ok-bg: #12301f; --warn: #f2ab45; --warn-bg: #352610; --bad: #f2716d; --bad-bg: #3a1716;
+  --info: #7db3ea; --info-bg: #142a40; --shadow: 0 1px 2px rgba(0,0,0,.4);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 400 16px/1.45 var(--f-body);
+  -webkit-tap-highlight-color: transparent;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bar); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+.topbar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  background: var(--bar); color: var(--bar-ink);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.topbar-in { max-width: 640px; margin: 0 auto; display: flex; align-items: center; gap: 12px; min-height: 56px; }
+.brand { font: 700 22px/1 var(--f-display); letter-spacing: .02em; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
+.brand-mark { width: 26px; height: 26px; flex: none; }
+.mode { margin-left: auto; font-size: 12px; color: var(--bar-muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.mode::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--bar-muted); }
+.mode.shared::before { background: #4cc785; }
+.mode.local::before { background: var(--accent); }
+
+main {
+  max-width: 640px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px calc(var(--nav-h) + 32px + env(safe-area-inset-bottom, 0px));
+  display: grid; gap: 20px;
+}
+h1, h2, h3 { font-family: var(--f-display); font-weight: 700; margin: 0; text-wrap: balance; line-height: 1.1; }
+h1 { font-size: 30px; letter-spacing: .01em; }
+h2 { font-size: 21px; text-transform: uppercase; letter-spacing: .04em; }
+h3 { font-size: 19px; }
+.eyebrow { font: 600 12px/1 var(--f-body); text-transform: uppercase; letter-spacing: .09em; color: var(--muted); }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+section { display: grid; gap: 12px; min-width: 0; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.spread { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+.list { display: grid; }
+.list > * + * { border-top: 1px solid var(--line); }
+
+/* Patente chilena */
+.plate {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--plate-bg); color: var(--plate-ink); border: 2px solid var(--plate-ink); border-radius: 5px;
+  padding: 1px 7px 2px; font: 700 15px/1 var(--f-mono); letter-spacing: .06em; white-space: nowrap; flex: none;
+}
+.plate small { font: 600 6.5px/1 var(--f-body); letter-spacing: .3em; margin-bottom: 1px; }
+.plate.lg { font-size: 24px; padding: 3px 12px 5px; border-width: 3px; }
+.plate.lg small { font-size: 9px; }
+
+/* Tiles */
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 460px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tile { padding: 12px; display: grid; gap: 4px; }
+.tile b { font: 700 30px/1 var(--f-display); }
+.tile span { font-size: 13px; color: var(--muted); line-height: 1.2; }
+.tile.bad b { color: var(--bad); } .tile.warn b { color: var(--warn); }
+
+/* Pills / tags */
+.pill { display: inline-flex; align-items: center; gap: 4px; font: 600 12px/1 var(--f-body); padding: 5px 8px; border-radius: 999px; white-space: nowrap; background: var(--surface-2); color: var(--muted); }
+.pill.ok { background: var(--ok-bg); color: var(--ok); }
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pill.bad { background: var(--bad-bg); color: var(--bad); }
+.pill.info { background: var(--info-bg); color: var(--info); }
+.tag { font: 700 11px/1 var(--f-mono); letter-spacing: .04em; padding: 6px 0; width: 42px; text-align: center; border-radius: 5px; flex: none; border: 1.5px solid currentColor; }
+.tag.auditoria { color: var(--info); } .tag.preventiva { color: var(--ok); } .tag.correctiva { color: var(--warn); }
+.tag.falla { color: var(--bad); } .tag.aceite { color: var(--ink); background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+/* Items */
+.item { display: flex; gap: 12px; align-items: center; padding: 12px 14px; background: none; border: 0; width: 100%; text-align: left; cursor: pointer; }
+.item:hover { background: var(--surface-2); }
+.item .body { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.item .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .meta { font-size: 13px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.alert { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; }
+.alert .sev { width: 10px; height: 10px; border-radius: 2px; margin-top: 6px; flex: none; }
+.sev.bad { background: var(--bad); } .sev.warn { background: var(--warn); } .sev.info { background: var(--info); }
+
+/* Truck card */
+.truck { display: grid; gap: 10px; padding: 14px; background: none; border: 0; text-align: left; width: 100%; cursor: pointer; }
+.truck:hover { background: var(--surface-2); }
+.truck .top { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.oilbar { height: 6px; border-radius: 3px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
+.oilbar i { display: block; height: 100%; background: var(--ok); }
+.oilbar.warn i { background: var(--warn); } .oilbar.bad i { background: var(--bad); }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; cursor: pointer; text-decoration: none; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.05); }
+.btn.danger { color: var(--bad); }
+.btn.danger.solid { background: var(--bad); color: #fff; border-color: var(--bad); }
+.btn.block { width: 100%; }
+.btn.sm { min-height: 34px; padding: 0 12px; font-size: 14px; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--info); font-weight: 600; cursor: pointer; font-size: 14px; }
+
+/* Forms */
+form { display: grid; gap: 16px; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field > span { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.field input, .field select, .field textarea {
+  width: 100%; min-height: 46px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface);
+}
+.field textarea { min-height: 84px; resize: vertical; }
+.field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 380px) { .grid2 { grid-template-columns: 1fr; } }
+.fieldset { display: grid; gap: 12px; padding: 14px; border-radius: 10px; border: 1px dashed var(--line); background: var(--surface-2); }
+.checks { display: flex; flex-wrap: wrap; gap: 8px; }
+.check { display: inline-flex; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; min-height: 44px; }
+.check input { width: 20px; height: 20px; accent-color: var(--accent); }
+
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.typepick { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.typebtn { display: grid; gap: 8px; justify-items: start; padding: 12px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface); cursor: pointer; text-align: left; font-weight: 600; font-size: 14px; line-height: 1.15; }
+.typebtn[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+
+/* Checklist */
+.ck-group { display: grid; gap: 0; }
+.ck-group h4 { margin: 8px 0 4px; font: 700 14px/1 var(--f-display); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.ck { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.ck > span { min-width: 0; font-size: 15px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
+.seg button { min-width: 50px; min-height: 40px; border: 0; background: var(--surface); font: 700 12px/1 var(--f-body); cursor: pointer; color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"][data-v="OK"] { background: var(--ok); color: #fff; }
+.seg button[aria-pressed="true"][data-v="Obs"] { background: var(--warn); color: #fff; }
+.seg button[aria-pressed="true"][data-v="Falla"] { background: var(--bad); color: #fff; }
+.score { display: flex; gap: 10px; align-items: baseline; }
+.score b { font: 700 28px/1 var(--f-display); }
+
+/* Bottom nav */
+.nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--bar); color: var(--bar-muted);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px));
+}
+.nav-in { max-width: 640px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); height: var(--nav-h); align-items: center; }
+.nav button { background: none; border: 0; color: inherit; display: grid; justify-items: center; gap: 3px; font: 600 11px/1 var(--f-body); letter-spacing: .03em; cursor: pointer; padding: 6px 0; }
+.nav button svg { width: 24px; height: 24px; }
+.nav button[aria-current="page"] { color: var(--bar-ink); }
+.nav button[aria-current="page"] svg { color: var(--accent); }
+.nav .fab { width: 52px; height: 52px; border-radius: 14px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; margin-top: -18px; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
+.nav .fab svg { width: 28px; height: 28px; color: var(--accent-ink) !important; }
+
+/* Sheet */
+.backdrop { position: fixed; inset: 0; background: rgba(8,12,18,.55); z-index: 40; display: flex; align-items: flex-end; justify-content: center; }
+.sheet {
+  background: var(--surface); width: 100%; max-width: 640px; max-height: 88vh; overflow-y: auto; border-radius: 16px 16px 0 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px calc(20px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 16px;
+}
+dl.kv { display: grid; grid-template-columns: minmax(110px, auto) 1fr; gap: 8px 14px; margin: 0; }
+dl.kv dt { color: var(--muted); font-size: 14px; }
+dl.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+.banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 12px 14px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); font-size: 14px; font-weight: 500; }
+.empty { padding: 28px 18px; text-align: center; display: grid; gap: 12px; justify-items: center; }
+.empty svg { width: 64px; height: 64px; color: var(--muted); }
+.confirm { display: grid; gap: 10px; padding: 12px; border-radius: 10px; background: var(--bad-bg); color: var(--bad); font-weight: 500; }
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 50;
+  bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: 10px; font-weight: 600; font-size: 15px;
+  max-width: calc(100% - 32px); box-shadow: 0 6px 20px rgba(0,0,0,.25);
+}
+.sheetlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.sheetlist li { display: flex; gap: 10px; align-items: center; font-size: 15px; }
+.sheetlist .xl { font: 700 11px/1 var(--f-mono); padding: 5px 6px; border-radius: 4px; background: var(--ok-bg); color: var(--ok); }
+</style>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="7" fill="#f2a900"/><path d="M6 20V11h12v9M18 14h4.5l3.5 3.5V20H18" fill="none" stroke="#1d1500" stroke-width="2.2" stroke-linejoin="round"/><circle cx="10" cy="22" r="2.4" fill="#1d1500"/><circle cx="22" cy="22" r="2.4" fill="#1d1500"/></svg>
+      Bitácora de Flota
+    </div>
+    <div class="mode" id="mode">Cargando…</div>
+  </div>
+</header>
+
+<main id="app" aria-live="polite"></main>
+
+<nav class="nav" aria-label="Secciones">
+  <div class="nav-in">
+    <button type="button" data-nav="inicio" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</button>
+    <button type="button" data-nav="flota">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16V6h12v10M14 9h4l4 4v3h-8"/><circle cx="6.5" cy="17.5" r="2"/><circle cx="17.5" cy="17.5" r="2"/></svg>Flota</button>
+    <button type="button" data-nav="nuevo" aria-label="Nuevo registro">
+      <span class="fab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></button>
+    <button type="button" data-nav="historial">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6M9 4a2 2 0 0 0-2 2H5v15h14V6h-2a2 2 0 0 0-2-2M8 11h8M8 15h8M8 19h5"/></svg>Historial</button>
+    <button type="button" data-nav="planilla">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>Planilla</button>
+  </div>
+</nav>
+
+<div id="overlay"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+"use strict";
+/* ---------- Catálogos ---------- */
+const TIPOS = {
+  auditoria:  { label: "Auditoría",        code: "AUD", estado: "Cerrado" },
+  preventiva: { label: "Mant. preventiva", code: "PRE", estado: "Cerrado" },
+  correctiva: { label: "Mant. correctiva", code: "COR", estado: "En proceso" },
+  falla:      { label: "Falla",            code: "FAL", estado: "Pendiente" },
+  aceite:     { label: "Cambio de aceite", code: "ACE", estado: "Cerrado" }
+};
+const ESTADOS = ["Pendiente", "En proceso", "Cerrado"];
+const SISTEMAS = ["Motor", "Transmisión / Caja", "Embrague", "Frenos", "Suspensión", "Dirección", "Neumáticos", "Eléctrico", "Refrigeración", "Combustible", "Escape / DPF", "Hidráulico", "Carrocería / Cabina", "Quinta rueda / Acople", "Otro"];
+const SEVERIDADES = ["Baja", "Media", "Alta", "Crítica"];
+const SERVICIOS = ["Servicio programado por km", "Servicio mayor", "Engrase general", "Revisión de frenos", "Alineación y balanceo", "Rotación / cambio de neumáticos", "Revisión sistema eléctrico", "Cambio de filtros", "Cambio refrigerante", "Revisión técnica (preparación)", "Otro"];
+const ACEITES = ["15W-40", "10W-40", "5W-30", "10W-30", "SAE 40", "80W-90 (diferencial)", "75W-90 (caja)"];
+const FILTROS = [["fAceite", "Filtro de aceite"], ["fAire", "Filtro de aire"], ["fComb", "Filtro de combustible"], ["fSep", "Separador de agua"]];
+const CHECKLIST = [
+  ["Frenos", [["frenoServicio", "Frenos de servicio / balatas"], ["frenoAire", "Sistema de aire (fugas, presión)"], ["frenoEstac", "Freno de estacionamiento"]]],
+  ["Neumáticos", [["neuPresion", "Presión de inflado"], ["neuBanda", "Desgaste de banda"], ["neuPernos", "Pernos y tuercas de rueda"]]],
+  ["Luces", [["luzFocos", "Focos altos y bajos"], ["luzInterm", "Intermitentes y balizas"], ["luzFreno", "Luces de freno y retroceso"]]],
+  ["Motor", [["motAceite", "Nivel de aceite"], ["motRefri", "Nivel de refrigerante"], ["motFugas", "Fugas visibles"], ["motCorreas", "Correas y mangueras"]]],
+  ["Cabina y seguridad", [["cabCinturon", "Cinturones de seguridad"], ["cabExtintor", "Extintor vigente"], ["cabKit", "Botiquín, triángulos y chaleco"], ["cabEspejos", "Espejos"], ["cabBocina", "Bocina y alarma de retroceso"], ["cabLimpia", "Limpiaparabrisas"]]],
+  ["Documentos", [["docRevision", "Revisión técnica al día"], ["docPermiso", "Permiso de circulación"], ["docSoap", "SOAP vigente"]]]
+];
+const CK_ITEMS = CHECKLIST.flatMap(([, items]) => items);
+
+/* ---------- Utilidades ---------- */
+const $ = (s, el = document) => el.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const hoy = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const num = v => (v === "" || v == null || isNaN(Number(v))) ? null : Number(v);
+const miles = n => n == null ? "—" : Number(n).toLocaleString("es-CL");
+const fmtKm = n => n == null ? "—" : miles(n) + " km";
+const fmtCLP = n => n ? "$" + miles(n) : "—";
+const fmtFecha = s => s ? s.split("-").reverse().join("-") : "—";
+const diasDesde = s => s ? Math.floor((Date.parse(hoy()) - Date.parse(s)) / 864e5) : null;
+const normPatente = p => String(p || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+const fmtPatente = p => (normPatente(p).match(/.{1,2}/g) || []).join("·");
+const plate = (p, lg) => `<span class="plate${lg ? " lg" : ""}"><small>CHILE</small>${esc(fmtPatente(p))}</span>`;
+const sget = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const sset = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 2800);
+}
+
+/* ---------- Almacenamiento: planilla compartida (claude db) o este teléfono (localStorage) ---------- */
+const Store = {
+  mode: "local", camiones: [], registros: [], db: null,
+  async init() {
+    let db = null;
+    if (window.claude && typeof window.claude.use === "function") {
+      try { db = await window.claude.use("db"); } catch { db = null; }
+    }
+    if (db) {
+      this.mode = "shared"; this.db = db;
+      const onErr = e => toast("Sin conexión con la planilla compartida (" + (e && e.code || "error") + ")");
+      db.collection("camiones").onSnapshot(s => { this.camiones = s.docs.map(d => ({ ...d.data(), id: d.id })); if (!s.metadata.fromCache) UI.conectando = false; render(); }, onErr);
+      db.collection("registros").onSnapshot(s => { this.registros = s.docs.map(d => ({ ...d.data(), id: d.id })); render(); }, onErr);
+    } else {
+      this.mode = "local";
+      try {
+        const raw = sget("bf_data");
+        if (raw) { const d = JSON.parse(raw); this.camiones = d.camiones || []; this.registros = d.registros || []; }
+        else if (!sget("bf_seeded")) { const s = ejemplo(); this.camiones = s.camiones; this.registros = s.registros; sset("bf_seeded", "1"); this.persist(); }
+      } catch {}
+    }
+    const m = $("#mode");
+    m.className = "mode " + this.mode;
+    m.textContent = this.mode === "shared" ? "Planilla compartida" : "En este teléfono";
+  },
+  persist() { sset("bf_data", JSON.stringify({ camiones: this.camiones, registros: this.registros })); },
+  async save(col, obj) {
+    if (this.mode === "shared") {
+      try { await this.db.collection(col).doc(obj.id).set(JSON.parse(JSON.stringify(obj))); }
+      catch (e) {
+        toast(e && e.code === "invalid_argument" ? "No tienes permiso para guardar en esta planilla." : e && e.code === "quota_exceeded" ? "La planilla está llena. Exporta y borra registros antiguos." : "No se pudo guardar. Intenta de nuevo.");
+        throw e;
+      }
+    } else {
+      const arr = this[col]; const i = arr.findIndex(x => x.id === obj.id);
+      if (i >= 0) arr[i] = obj; else arr.push(obj);
+      this.persist(); render();
+    }
+  },
+  async remove(col, id) {
+    if (this.mode === "shared") { try { await this.db.collection(col).doc(id).delete(); } catch (e) { toast("No se pudo borrar."); throw e; } }
+    else { this[col] = this[col].filter(x => x.id !== id); this.persist(); render(); }
+  }
+};
+
+/* ---------- Datos de ejemplo ---------- */
+function ejemplo() {
+  const d = n => { const x = new Date(); x.setDate(x.getDate() - n); return x.toISOString().slice(0, 10); };
+  const c = [
+    { id: "ej-c1", patente: "KZRT41", marca: "Volvo", modelo: "FH 460", anio: 2019, km: 284500, intervalo: 15000, ejemplo: true },
+    { id: "ej-c2", patente: "LBHX27", marca: "Mercedes-Benz", modelo: "Actros 2645", anio: 2021, km: 176200, intervalo: 15000, ejemplo: true },
+    { id: "ej-c3", patente: "JWPD85", marca: "Scania", modelo: "R450", anio: 2018, km: 402900, intervalo: 12000, ejemplo: true }
+  ];
+  const ck = Object.fromEntries(CK_ITEMS.map(([k]) => [k, "OK"]));
+  const r = [
+    { id: "ej-r1", tipo: "aceite", camionId: "ej-c1", fecha: d(40), km: 271200, responsable: "J. Muñoz", estado: "Cerrado", tipoAceite: "15W-40", litros: 38, fAceite: true, fAire: false, fComb: true, fSep: true, proximoKm: 286200, costo: 245000, descripcion: "Cambio según pauta." },
+    { id: "ej-r2", tipo: "aceite", camionId: "ej-c2", fecha: d(12), km: 172000, responsable: "J. Muñoz", estado: "Cerrado", tipoAceite: "10W-40", litros: 36, fAceite: true, fAire: true, fComb: true, fSep: false, proximoKm: 187000, costo: 268000, descripcion: "" },
+    { id: "ej-r3", tipo: "aceite", camionId: "ej-c3", fecha: d(55), km: 388400, responsable: "Taller externo", estado: "Cerrado", tipoAceite: "15W-40", litros: 40, fAceite: true, fAire: false, fComb: false, fSep: false, proximoKm: 400400, costo: 230000, descripcion: "" },
+    { id: "ej-r4", tipo: "falla", camionId: "ej-c3", fecha: d(2), km: 402850, responsable: "P. Rojas (conductor)", estado: "Pendiente", sistema: "Frenos", severidad: "Alta", detenido: true, descripcion: "Fuga de aire en válvula relé eje trasero. Presión baja al detenerse." },
+    { id: "ej-r5", tipo: "correctiva", camionId: "ej-c1", fecha: d(6), km: 283900, responsable: "L. Soto", estado: "En proceso", sistema: "Eléctrico", causa: "Alternador con carga baja", repuestos: "Regulador de voltaje", horas: 3, taller: "Interno", costo: 95000, descripcion: "Se reemplaza regulador, pendiente prueba en ruta." },
+    { id: "ej-r6", tipo: "preventiva", camionId: "ej-c2", fecha: d(12), km: 172000, responsable: "J. Muñoz", estado: "Cerrado", servicio: "Servicio programado por km", repuestos: "Filtros, engrase", proximoKm: 187000, proximaFecha: "", costo: 120000, descripcion: "Servicio 172.000 km." },
+    { id: "ej-r7", tipo: "auditoria", camionId: "ej-c2", fecha: d(3), km: 176100, responsable: "C. Pérez (supervisor)", estado: "Cerrado", checklist: { ...ck, neuBanda: "Obs", cabExtintor: "Obs" }, descripcion: "Neumático eje 3 lado izquierdo cerca del límite. Extintor vence el próximo mes." },
+    { id: "ej-r8", tipo: "auditoria", camionId: "ej-c3", fecha: d(2), km: 402850, responsable: "C. Pérez (supervisor)", estado: "Cerrado", checklist: { ...ck, frenoAire: "Falla", luzFreno: "Obs" }, descripcion: "Fuga de aire detectada, camión queda detenido." }
+  ];
+  r.forEach(x => { x.ejemplo = true; x.creado = Date.now(); });
+  return { camiones: c, registros: r };
+}
+
+/* ---------- Cálculos ---------- */
+const camion = id => Store.camiones.find(c => c.id === id);
+const porFecha = (a, b) => (b.fecha || "").localeCompare(a.fecha || "") || (b.km || 0) - (a.km || 0) || (b.creado || 0) - (a.creado || 0);
+const registrosDe = id => Store.registros.filter(r => r.camionId === id).sort(porFecha);
+function ultimo(id, tipo) { return registrosDe(id).find(r => r.tipo === tipo); }
+function estadoAceite(c) {
+  const u = ultimo(c.id, "aceite");
+  if (!u || u.proximoKm == null) return { nivel: "info", texto: "Sin cambio registrado", restante: null, ultimo: u };
+  const restante = u.proximoKm - (c.km || 0);
+  const tramo = Math.max(1, u.proximoKm - (u.km || 0));
+  const pct = Math.max(0, Math.min(100, (restante / tramo) * 100));
+  if (restante <= 0) return { nivel: "bad", texto: "Vencido hace " + fmtKm(-restante), restante, pct: 100, ultimo: u };
+  if (restante <= 1500) return { nivel: "warn", texto: "Faltan " + fmtKm(restante), restante, pct, ultimo: u };
+  return { nivel: "ok", texto: "Faltan " + fmtKm(restante), restante, pct, ultimo: u };
+}
+const abiertas = id => Store.registros.filter(r => (!id || r.camionId === id) && r.tipo === "falla" && r.estado !== "Cerrado");
+function estadoCamion(c) {
+  const f = abiertas(c.id);
+  if (f.some(x => x.detenido)) return { nivel: "bad", texto: "Detenido" };
+  const a = estadoAceite(c);
+  if (f.length || a.nivel === "bad" || a.nivel === "warn") return { nivel: "warn", texto: "Revisar" };
+  return { nivel: "ok", texto: "Operativo" };
+}
+function puntaje(ck) {
+  const vals = CK_ITEMS.map(([k]) => ck && ck[k]).filter(Boolean);
+  const ok = vals.filter(v => v === "OK").length, obs = vals.filter(v => v === "Obs").length, falla = vals.filter(v => v === "Falla").length;
+  return { ok, obs, falla, total: vals.length, pct: vals.length ? Math.round(ok / vals.length * 100) : 0 };
+}
+function tituloRegistro(r) {
+  switch (r.tipo) {
+    case "auditoria": { const p = puntaje(r.checklist); return `Auditoría · ${p.pct}% OK` + (p.falla ? ` · ${p.falla} falla${p.falla > 1 ? "s" : ""}` : "") + (p.obs ? ` · ${p.obs} obs.` : ""); }
+    case "preventiva": return r.servicio || "Mantención preventiva";
+    case "correctiva": return `${r.sistema || "Correctiva"}${r.causa ? ": " + r.causa : ""}`;
+    case "falla": return `Falla ${r.severidad ? r.severidad.toLowerCase() : ""} · ${r.sistema || ""}`;
+    case "aceite": return `Aceite ${r.tipoAceite || ""}${r.litros ? " · " + r.litros + " L" : ""}`;
+  }
+  return TIPOS[r.tipo]?.label || r.tipo;
+}
+function alertas() {
+  const out = [];
+  for (const c of Store.camiones) {
+    const a = estadoAceite(c);
+    if (a.nivel === "bad" || a.nivel === "warn") out.push({ nivel: a.nivel, camion: c, texto: "Cambio de aceite: " + a.texto.toLowerCase(), accion: { tipo: "aceite", camionId: c.id } });
+    if (a.nivel === "info") out.push({ nivel: "info", camion: c, texto: "Sin cambio de aceite registrado", accion: { tipo: "aceite", camionId: c.id } });
+    const au = ultimo(c.id, "auditoria"); const dd = au ? diasDesde(au.fecha) : null;
+    if (!au || dd > 30) out.push({ nivel: "info", camion: c, texto: au ? `Última auditoría hace ${dd} días` : "Sin auditorías", accion: { tipo: "auditoria", camionId: c.id } });
+    const pv = ultimo(c.id, "preventiva");
+    if (pv && pv.proximoKm && pv.proximoKm - (c.km || 0) <= 1500 && !(a.ultimo && pv.proximoKm === a.ultimo.proximoKm))
+      out.push({ nivel: pv.proximoKm <= (c.km || 0) ? "bad" : "warn", camion: c, texto: `Preventiva (${pv.servicio || "servicio"}) a los ${fmtKm(pv.proximoKm)}`, accion: { tipo: "preventiva", camionId: c.id } });
+    if (pv && pv.proximaFecha) { const dd2 = -diasDesde(pv.proximaFecha); if (dd2 <= 7) out.push({ nivel: dd2 < 0 ? "bad" : "warn", camion: c, texto: `Preventiva programada ${dd2 < 0 ? "vencida el" : "para el"} ${fmtFecha(pv.proximaFecha)}`, accion: { tipo: "preventiva", camionId: c.id } }); }
+  }
+  for (const f of abiertas()) {
+    const c = camion(f.camionId); if (!c) continue;
+    out.push({ nivel: f.severidad === "Alta" || f.severidad === "Crítica" || f.detenido ? "bad" : "warn", camion: c, texto: `Falla ${f.estado.toLowerCase()}: ${f.sistema}${f.detenido ? " · camión detenido" : ""}`, registro: f.id });
+  }
+  const rank = { bad: 0, warn: 1, info: 2 };
+  return out.sort((a, b) => rank[a.nivel] - rank[b.nivel]);
+}
+
+/* ---------- Estado de la UI ---------- */
+const UI = { view: "inicio", camionId: null, filtro: { tipo: "", camionId: "", estado: "", q: "" }, form: null, confirm: null, conectando: true };
+
+function go(view, extra = {}) {
+  UI.view = view; Object.assign(UI, { camionId: null, confirm: null }, extra);
+  if (view === "nuevo" && !extra.form) UI.form = null;
+  const tab = { camion: "flota", "camion-form": "flota" }[view] || view;
+  document.querySelectorAll("[data-nav]").forEach(b => b.dataset.nav === tab ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
+  $("#app").innerHTML = ""; closeSheet(); render(); window.scrollTo(0, 0);
+}
+
+function render() {
+  const app = $("#app");
+  if (UI.view === "nuevo" && app.querySelector("#f-reg")) return; // no pisar un formulario en edición por cambios remotos
+  if (UI.view === "camion-form" && app.querySelector("#f-cam")) return;
+  const v = { inicio: vInicio, flota: vFlota, camion: vCamion, "camion-form": vCamionForm, nuevo: vNuevo, historial: vHistorial, planilla: vPlanilla }[UI.view] || vInicio;
+  app.innerHTML = v();
+  if (UI.view === "nuevo") wireRegistroForm();
+  if (UI.view === "camion-form") wireCamionForm();
+}
+
+const ejemploBanner = () => Store.camiones.some(c => c.ejemplo)
+  ? `<div class="banner"><span>Estás viendo datos de ejemplo.</span><button class="btn sm" data-act="borrar-ejemplos">Borrar ejemplos</button></div>` : "";
+
+function itemRegistro(r, conPatente = true) {
+  const c = camion(r.camionId);
+  const est = r.estado === "Cerrado" ? "ok" : r.estado === "En proceso" ? "info" : "warn";
+  return `<button class="item" data-act="ver-reg" data-id="${esc(r.id)}">
+    <span class="tag ${esc(r.tipo)}">${esc(TIPOS[r.tipo]?.code || "?")}</span>
+    <span class="body"><span class="title">${esc(tituloRegistro(r))}</span>
+      <span class="meta">${conPatente && c ? `<span class="num">${esc(fmtPatente(c.patente))}</span>` : ""}<span>${fmtFecha(r.fecha)}</span><span class="num">${fmtKm(r.km)}</span></span></span>
+    <span class="pill ${est}">${esc(r.estado || "—")}</span></button>`;
+}
+
+function emptyFlota() {
+  return `<div class="panel empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16V6h12v10M14 9h4l4 4v3h-8"/><circle cx="6.5" cy="17.5" r="2"/><circle cx="17.5" cy="17.5" r="2"/></svg>
+    <h3>${UI.conectando && Store.mode === "shared" ? "Cargando la flota…" : "Aún no hay camiones"}</h3>
+    <p class="muted small" style="margin:0;max-width:34ch">Agrega cada camión con su patente y kilometraje. Después podrás registrar auditorías, mantenciones, fallas y cambios de aceite.</p>
+    <div class="row" style="justify-content:center"><button class="btn primary" data-act="nuevo-camion">Agregar camión</button><button class="btn" data-act="cargar-ejemplos">Cargar ejemplo</button></div>
+  </div>`;
+}
+
+/* ---------- Vistas ---------- */
+function vInicio() {
+  if (!Store.camiones.length) return `<section><span class="eyebrow">${fmtFecha(hoy())}</span><h1>Control de flota</h1></section>${emptyFlota()}`;
+  const al = alertas();
+  const fa = abiertas().length;
+  const ac = Store.camiones.filter(c => ["bad", "warn"].includes(estadoAceite(c).nivel)).length;
+  const mes = hoy().slice(0, 7);
+  const aud = Store.registros.filter(r => r.tipo === "auditoria" && (r.fecha || "").startsWith(mes)).length;
+  const det = Store.camiones.filter(c => estadoCamion(c).nivel === "bad").length;
+  const recientes = [...Store.registros].sort(porFecha).slice(0, 6);
+  return `${ejemploBanner()}
+  <section><span class="eyebrow">${fmtFecha(hoy())}</span><h1>Control de flota</h1></section>
+  <div class="tiles">
+    <div class="panel tile"><b class="num">${Store.camiones.length - det}/${Store.camiones.length}</b><span>Camiones operativos</span></div>
+    <div class="panel tile ${fa ? "bad" : ""}"><b class="num">${fa}</b><span>Fallas abiertas</span></div>
+    <div class="panel tile ${ac ? "warn" : ""}"><b class="num">${ac}</b><span>Aceite por vencer o vencido</span></div>
+    <div class="panel tile"><b class="num">${aud}</b><span>Auditorías este mes</span></div>
+  </div>
+  <section><div class="spread"><h2>Requiere atención</h2><span class="muted small">${al.length} pendiente${al.length === 1 ? "" : "s"}</span></div>
+    ${al.length ? `<div class="panel list">${al.slice(0, 8).map(a => `<div class="alert"><span class="sev ${a.nivel}"></span>
+      <div class="body" style="flex:1;min-width:0;display:grid;gap:6px"><div class="row">${plate(a.camion.patente)}<span class="small">${esc(a.camion.marca || "")} ${esc(a.camion.modelo || "")}</span></div><span>${esc(a.texto)}</span></div>
+      ${a.registro ? `<button class="btn sm" data-act="ver-reg" data-id="${esc(a.registro)}">Ver</button>` : `<button class="btn sm" data-act="registrar" data-tipo="${a.accion.tipo}" data-camion="${esc(a.accion.camionId)}">Registrar</button>`}</div>`).join("")}</div>
+      ${al.length > 8 ? `<span class="muted small">y ${al.length - 8} más en Flota.</span>` : ""}`
+    : `<div class="panel alert"><span class="sev" style="background:var(--ok)"></span><span>Todo al día. No hay fallas abiertas ni cambios de aceite por vencer.</span></div>`}
+  </section>
+  <section><div class="spread"><h2>Últimos registros</h2><button class="linkbtn" data-nav-link="historial">Ver historial</button></div>
+    ${recientes.length ? `<div class="panel list">${recientes.map(r => itemRegistro(r)).join("")}</div>` : `<p class="muted">Todavía no hay registros. Toca el botón + para registrar el primero.</p>`}
+  </section>`;
+}
+
+function vFlota() {
+  const cams = [...Store.camiones].sort((a, b) => ({ bad: 0, warn: 1, ok: 2 }[estadoCamion(a).nivel] - { bad: 0, warn: 1, ok: 2 }[estadoCamion(b).nivel]) || normPatente(a.patente).localeCompare(normPatente(b.patente)));
+  return `${ejemploBanner()}<section><div class="spread"><h1>Flota</h1><button class="btn primary sm" data-act="nuevo-camion">+ Camión</button></div>
+  <span class="muted small">${cams.length} camion${cams.length === 1 ? "" : "es"} · ordenados por prioridad</span></section>
+  ${cams.length ? `<div class="panel list">${cams.map(c => {
+    const a = estadoAceite(c), e = estadoCamion(c), f = abiertas(c.id).length;
+    return `<button class="truck" data-act="ver-camion" data-id="${esc(c.id)}">
+      <div class="top">${plate(c.patente, true)}<div style="flex:1;min-width:0"><div style="font-weight:600">${esc(c.marca || "")} ${esc(c.modelo || "")}</div><div class="muted small"><span class="num">${fmtKm(c.km)}</span>${c.anio ? " · " + esc(c.anio) : ""}</div></div><span class="pill ${e.nivel}">${e.texto}</span></div>
+      <div style="display:grid;gap:6px"><div class="spread small"><span class="muted">Aceite</span><span style="color:var(--${a.nivel === "ok" || a.nivel === "info" ? "muted" : a.nivel})">${esc(a.texto)}</span></div>
+      ${a.restante != null ? `<div class="oilbar ${a.nivel}"><i style="width:${Math.round(a.pct)}%"></i></div>` : ""}
+      ${f ? `<span class="small" style="color:var(--bad)">${f} falla${f > 1 ? "s" : ""} abierta${f > 1 ? "s" : ""}</span>` : ""}</div>
+    </button>`; }).join("")}</div>` : emptyFlota()}`;
+}
+
+function vCamion() {
+  const c = camion(UI.camionId);
+  if (!c) return `<p class="muted">El camión ya no existe.</p><button class="btn" data-nav-link="flota">Volver a Flota</button>`;
+  const a = estadoAceite(c), e = estadoCamion(c), regs = registrosDe(c.id);
+  const au = ultimo(c.id, "auditoria");
+  const costo = regs.reduce((s, r) => s + (num(r.costo) || 0), 0);
+  return `<div><button class="linkbtn" data-nav-link="flota">‹ Flota</button></div>
+  <section><div class="row">${plate(c.patente, true)}<span class="pill ${e.nivel}">${e.texto}</span></div>
+    <h1>${esc(c.marca || "")} ${esc(c.modelo || "")}</h1></section>
+  <div class="panel" style="padding:14px"><dl class="kv">
+    <dt>Kilometraje</dt><dd class="num">${fmtKm(c.km)}</dd>
+    <dt>Año</dt><dd>${esc(c.anio || "—")}</dd>
+    <dt>Aceite</dt><dd>${esc(a.texto)}${a.ultimo ? `<br><span class="muted small">Último: ${fmtFecha(a.ultimo.fecha)} a los ${fmtKm(a.ultimo.km)} · próximo ${fmtKm(a.ultimo.proximoKm)}</span>` : ""}</dd>
+    <dt>Intervalo aceite</dt><dd class="num">${fmtKm(c.intervalo)}</dd>
+    <dt>Última auditoría</dt><dd>${au ? `${fmtFecha(au.fecha)} · ${puntaje(au.checklist).pct}% OK` : "—"}</dd>
+    <dt>Gasto registrado</dt><dd class="num">${fmtCLP(costo)}</dd>
+    ${c.notas ? `<dt>Notas</dt><dd>${esc(c.notas)}</dd>` : ""}
+  </dl></div>
+  <div class="grid2"><button class="btn primary" data-act="registrar" data-camion="${esc(c.id)}">+ Registrar</button><button class="btn" data-act="editar-camion" data-id="${esc(c.id)}">Editar camión</button></div>
+  <section><h2>Historial (${regs.length})</h2>
+    ${regs.length ? `<div class="panel list">${regs.map(r => itemRegistro(r, false)).join("")}</div>` : `<p class="muted">Sin registros para este camión.</p>`}</section>
+  <section>${UI.confirm === "camion"
+    ? `<div class="confirm">¿Borrar ${esc(fmtPatente(c.patente))}? Sus ${regs.length} registros también se borrarán.<div class="grid2"><button class="btn" data-act="cancelar">Cancelar</button><button class="btn danger solid" data-act="borrar-camion-ok" data-id="${esc(c.id)}">Sí, borrar</button></div></div>`
+    : `<button class="btn danger" data-act="borrar-camion">Borrar camión</button>`}</section>`;
+}
+
+function vCamionForm() {
+  const c = UI.camionId ? camion(UI.camionId) || {} : {};
+  return `<div><button class="linkbtn" data-act="volver-camion">‹ Volver</button></div>
+  <h1>${c.id ? "Editar camión" : "Nuevo camión"}</h1>
+  <form id="f-cam" class="panel" style="padding:16px" novalidate>
+    <label class="field"><span>Patente *</span><input id="cam-patente" name="patente" required autocapitalize="characters" autocomplete="off" placeholder="Ej. KZRT41" value="${esc(c.patente || "")}"></label>
+    <div class="grid2">
+      <label class="field"><span>Marca</span><input id="cam-marca" name="marca" list="dl-marcas" value="${esc(c.marca || "")}"></label>
+      <label class="field"><span>Modelo</span><input id="cam-modelo" name="modelo" value="${esc(c.modelo || "")}"></label>
+      <label class="field"><span>Año</span><input id="cam-anio" name="anio" type="number" inputmode="numeric" min="1980" max="2100" value="${esc(c.anio || "")}"></label>
+      <label class="field"><span>Kilometraje actual *</span><input id="cam-km" name="km" type="number" inputmode="numeric" min="0" required value="${esc(c.km ?? "")}"></label>
+    </div>
+    <label class="field"><span>Intervalo cambio de aceite (km)</span><input id="cam-intervalo" name="intervalo" type="number" inputmode="numeric" min="1000" step="500" value="${esc(c.intervalo || 15000)}"></label>
+    <label class="field"><span>Notas</span><textarea id="cam-notas" name="notas" placeholder="Conductor asignado, faena, observaciones…">${esc(c.notas || "")}</textarea></label>
+    <datalist id="dl-marcas">${["Volvo", "Scania", "Mercedes-Benz", "Freightliner", "International", "Kenworth", "Iveco", "MAN", "Hino", "Mack", "Foton", "JAC"].map(m => `<option value="${m}">`).join("")}</datalist>
+    <button class="btn primary block" type="submit">Guardar camión</button>
+  </form>`;
+}
+
+function vNuevo() {
+  if (!Store.camiones.length) return `<h1>Nuevo registro</h1>${emptyFlota()}`;
+  const v = UI.form || {};
+  const tipo = v.tipo || "auditoria";
+  const c = camion(v.camionId) || null;
+  const editing = !!v.id;
+  return `<section><span class="eyebrow">${editing ? "Editando registro" : "Nuevo registro"}</span><h1>${esc(TIPOS[tipo].label)}</h1></section>
+  <form id="f-reg" novalidate>
+    ${editing ? "" : `<div class="typepick" role="group" aria-label="Tipo de registro">${Object.entries(TIPOS).map(([k, t]) =>
+      `<button type="button" class="typebtn" data-tipo="${k}" aria-pressed="${k === tipo}"><span class="tag ${k}">${t.code}</span>${t.label}</button>`).join("")}</div>`}
+    <div class="panel" style="padding:16px;display:grid;gap:16px">
+      <label class="field"><span>Camión *</span><select id="reg-camion" name="camionId" required>
+        <option value="">Selecciona patente…</option>
+        ${[...Store.camiones].sort((a, b) => normPatente(a.patente).localeCompare(normPatente(b.patente))).map(x => `<option value="${esc(x.id)}" ${x.id === v.camionId ? "selected" : ""}>${esc(fmtPatente(x.patente))} — ${esc(x.marca || "")} ${esc(x.modelo || "")}</option>`).join("")}
+      </select></label>
+      <div class="grid2">
+        <label class="field"><span>Fecha *</span><input id="reg-fecha" name="fecha" type="date" required value="${esc(v.fecha || hoy())}"></label>
+        <label class="field"><span>Kilometraje *</span><input id="reg-km" name="km" type="number" inputmode="numeric" min="0" required value="${esc(v.km ?? (c ? c.km : ""))}" placeholder="${c ? esc(c.km) : ""}"></label>
+      </div>
+      <div class="grid2">
+        <label class="field"><span>${tipo === "falla" ? "Reportado por" : tipo === "auditoria" ? "Auditor" : "Responsable"}</span><input id="reg-resp" name="responsable" value="${esc(v.responsable ?? sget("bf_resp") ?? "")}" autocomplete="name"></label>
+        <label class="field"><span>Estado</span><select id="reg-estado" name="estado">${ESTADOS.map(s => `<option ${s === (v.estado || TIPOS[tipo].estado) ? "selected" : ""}>${s}</option>`).join("")}</select></label>
+      </div>
+    </div>
+    ${seccionTipo(tipo, v, c)}
+    <div class="panel" style="padding:16px;display:grid;gap:16px">
+      <label class="field"><span>${tipo === "falla" ? "Descripción de la falla" : "Observaciones"}</span><textarea id="reg-desc" name="descripcion" placeholder="${tipo === "falla" ? "Qué pasó, cuándo y cómo se detectó" : "Detalle del trabajo u observaciones"}">${esc(v.descripcion || "")}</textarea></label>
+      ${tipo === "auditoria" || tipo === "falla" ? "" : `<label class="field"><span>Costo (CLP)</span><input id="reg-costo" name="costo" type="number" inputmode="numeric" min="0" step="1" value="${esc(v.costo ?? "")}" placeholder="0"></label>`}
+    </div>
+    <div class="grid2"><button type="button" class="btn" data-act="${editing ? "cancelar-edicion" : "limpiar"}">${editing ? "Cancelar" : "Limpiar"}</button><button class="btn primary" type="submit">Guardar registro</button></div>
+  </form>`;
+}
+
+function seccionTipo(tipo, v, c) {
+  const sel = (id, name, opts, val, req) => `<select id="${id}" name="${name}" ${req ? "required" : ""}><option value="">Selecciona…</option>${opts.map(o => `<option ${o === val ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
+  if (tipo === "auditoria") {
+    const ck = v.checklist || {}; const p = puntaje(ck);
+    return `<div class="panel" style="padding:16px;display:grid;gap:8px">
+      <div class="spread"><h3>Checklist</h3><div class="score" id="score"><b class="num">${p.pct}%</b><span class="muted small">${p.total}/${CK_ITEMS.length} revisados</span></div></div>
+      <div class="row"><button type="button" class="btn sm" data-act="todo-ok">Marcar todo OK</button><span class="muted small">Luego cambia solo lo observado.</span></div>
+      ${CHECKLIST.map(([g, items]) => `<div class="ck-group"><h4>${esc(g)}</h4>${items.map(([k, l]) => `<div class="ck"><span>${esc(l)}</span><span class="seg" data-ck="${k}">${["OK", "Obs", "Falla"].map(x => `<button type="button" data-v="${x}" aria-pressed="${ck[k] === x}">${x}</button>`).join("")}</span></div>`).join("")}</div>`).join("")}
+    </div>`;
+  }
+  if (tipo === "preventiva") return `<div class="fieldset">
+    <label class="field"><span>Servicio *</span>${sel("reg-servicio", "servicio", SERVICIOS, v.servicio, true)}</label>
+    <label class="field"><span>Repuestos / insumos</span><input id="reg-repuestos" name="repuestos" value="${esc(v.repuestos || "")}"></label>
+    <div class="grid2"><label class="field"><span>Próximo a los (km)</span><input id="reg-proxkm" name="proximoKm" type="number" inputmode="numeric" value="${esc(v.proximoKm ?? "")}"></label>
+    <label class="field"><span>Próxima fecha</span><input id="reg-proxfecha" name="proximaFecha" type="date" value="${esc(v.proximaFecha || "")}"></label></div></div>`;
+  if (tipo === "correctiva") return `<div class="fieldset">
+    <label class="field"><span>Sistema *</span>${sel("reg-sistema", "sistema", SISTEMAS, v.sistema, true)}</label>
+    <label class="field"><span>Causa / diagnóstico</span><input id="reg-causa" name="causa" value="${esc(v.causa || "")}"></label>
+    <label class="field"><span>Repuestos cambiados</span><input id="reg-repuestos" name="repuestos" value="${esc(v.repuestos || "")}"></label>
+    <div class="grid2"><label class="field"><span>Horas de taller</span><input id="reg-horas" name="horas" type="number" inputmode="decimal" step="0.5" min="0" value="${esc(v.horas ?? "")}"></label>
+    <label class="field"><span>Taller</span>${sel("reg-taller", "taller", ["Interno", "Externo", "Concesionario"], v.taller)}</label></div></div>`;
+  if (tipo === "falla") return `<div class="fieldset">
+    <div class="grid2"><label class="field"><span>Sistema *</span>${sel("reg-sistema", "sistema", SISTEMAS, v.sistema, true)}</label>
+    <label class="field"><span>Severidad *</span>${sel("reg-sev", "severidad", SEVERIDADES, v.severidad, true)}</label></div>
+    <label class="check"><input type="checkbox" id="reg-detenido" name="detenido" ${v.detenido ? "checked" : ""}> Camión detenido (fuera de servicio)</label></div>`;
+  if (tipo === "aceite") {
+    const km = num(v.km ?? (c ? c.km : null)); const prox = v.proximoKm ?? (km != null && c ? km + (c.intervalo || 15000) : "");
+    return `<div class="fieldset">
+    <div class="grid2"><label class="field"><span>Aceite *</span><input id="reg-aceite" name="tipoAceite" list="dl-aceites" required value="${esc(v.tipoAceite || "")}" placeholder="15W-40"></label>
+    <label class="field"><span>Litros</span><input id="reg-litros" name="litros" type="number" inputmode="decimal" step="0.5" min="0" value="${esc(v.litros ?? "")}"></label></div>
+    <div class="field"><span>Filtros cambiados</span><div class="checks">${FILTROS.map(([k, l]) => `<label class="check"><input type="checkbox" id="reg-${k}" name="${k}" ${v[k] ?? (k === "fAceite") ? "checked" : ""}> ${l}</label>`).join("")}</div></div>
+    <label class="field"><span>Próximo cambio a los (km)</span><input id="reg-proxkm" name="proximoKm" type="number" inputmode="numeric" value="${esc(prox)}" data-auto="${v.proximoKm == null ? 1 : 0}"></label>
+    <datalist id="dl-aceites">${ACEITES.map(a => `<option value="${a}">`).join("")}</datalist></div>`;
+  }
+  return "";
+}
+
+function leerFormRegistro() {
+  const f = $("#f-reg"); if (!f) return UI.form || {};
+  const fd = new FormData(f); const v = { ...(UI.form || {}) };
+  for (const [k, val] of fd.entries()) v[k] = val;
+  f.querySelectorAll("input[type=checkbox]").forEach(cb => { v[cb.name] = cb.checked; });
+  if (!v.tipo) v.tipo = "auditoria";
+  return v;
+}
+
+function wireRegistroForm() {
+  const f = $("#f-reg"); if (!f) return;
+  f.addEventListener("click", e => {
+    const tb = e.target.closest(".typebtn");
+    if (tb) { const v = leerFormRegistro(); v.tipo = tb.dataset.tipo; delete v.estado; if (v.proximoKm != null && tb.dataset.tipo === "aceite") delete v.proximoKm; UI.form = v; $("#app").innerHTML = vNuevo(); wireRegistroForm(); return; }
+    const sb = e.target.closest(".seg button");
+    if (sb) { const k = sb.parentElement.dataset.ck; UI.form = leerFormRegistro(); UI.form.checklist = { ...(UI.form.checklist || {}), [k]: sb.dataset.v }; sb.parentElement.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b === sb)); actualizarPuntaje(); return; }
+    if (e.target.closest("[data-act=todo-ok]")) { UI.form = leerFormRegistro(); UI.form.checklist = Object.fromEntries(CK_ITEMS.map(([k]) => [k, (UI.form.checklist || {})[k] && UI.form.checklist[k] !== "OK" ? UI.form.checklist[k] : "OK"])); f.querySelectorAll(".seg").forEach(s => s.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === UI.form.checklist[s.dataset.ck]))); actualizarPuntaje(); }
+  });
+  const selC = $("#reg-camion"), km = $("#reg-km");
+  selC.addEventListener("change", () => { const c = camion(selC.value); if (c && (!km.value || km.dataset.auto !== "0")) { km.value = c.km ?? ""; km.dataset.auto = "1"; } autoProx(); });
+  km.addEventListener("input", () => { km.dataset.auto = "0"; autoProx(); });
+  const prox = $("#reg-proxkm"); if (prox) prox.addEventListener("input", () => { prox.dataset.auto = "0"; });
+  function autoProx() { const p = $("#reg-proxkm"); const c = camion(selC.value); if (p && p.dataset.auto === "1" && $("#reg-aceite") && c && km.value) p.value = Number(km.value) + (c.intervalo || 15000); }
+  f.addEventListener("submit", guardarRegistro);
+}
+function actualizarPuntaje() { const p = puntaje(UI.form.checklist); const s = $("#score"); if (s) s.innerHTML = `<b class="num">${p.pct}%</b><span class="muted small">${p.total}/${CK_ITEMS.length} revisados</span>`; }
+
+async function guardarRegistro(e) {
+  e.preventDefault();
+  const v = leerFormRegistro(); const c = camion(v.camionId);
+  const falta = [];
+  if (!c) falta.push("camión"); if (!v.fecha) falta.push("fecha"); if (num(v.km) == null) falta.push("kilometraje");
+  if (v.tipo === "preventiva" && !v.servicio) falta.push("servicio");
+  if ((v.tipo === "correctiva" || v.tipo === "falla") && !v.sistema) falta.push("sistema");
+  if (v.tipo === "falla" && !v.severidad) falta.push("severidad");
+  if (v.tipo === "aceite" && !v.tipoAceite) falta.push("tipo de aceite");
+  if (v.tipo === "auditoria" && puntaje(v.checklist).total === 0) falta.push("al menos un punto del checklist");
+  if (falta.length) { toast("Falta completar: " + falta.join(", ")); return; }
+  const r = { ...v, id: v.id || uid(), creado: v.creado || Date.now(), km: num(v.km), costo: num(v.costo), litros: num(v.litros), horas: num(v.horas), proximoKm: num(v.proximoKm), patente: normPatente(c.patente) };
+  if (r.estado === "Cerrado" && !r.cerrado) r.cerrado = hoy();
+  if (r.estado !== "Cerrado") delete r.cerrado;
+  delete r.ejemplo;
+  if (r.tipo !== "auditoria") delete r.checklist;
+  if (r.responsable) sset("bf_resp", r.responsable);
+  try {
+    await Store.save("registros", r);
+    if (r.km != null && r.km > (c.km || 0)) await Store.save("camiones", { ...c, km: r.km });
+  } catch { return; }
+  UI.form = null; toast(v.id ? "Registro actualizado" : "Registro guardado");
+  go("camion", { camionId: c.id });
+}
+
+function wireCamionForm() {
+  const f = $("#f-cam"); if (!f) return;
+  const p = $("#cam-patente"); p.addEventListener("input", () => { const pos = p.selectionStart; p.value = p.value.toUpperCase(); p.setSelectionRange(pos, pos); });
+  f.addEventListener("submit", async e => {
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(f).entries());
+    const pat = normPatente(fd.patente);
+    if (pat.length < 5) { toast("Ingresa una patente válida (ej. KZRT41)."); return; }
+    if (num(fd.km) == null) { toast("Ingresa el kilometraje actual."); return; }
+    const prev = UI.camionId ? camion(UI.camionId) : null;
+    if (Store.camiones.some(x => normPatente(x.patente) === pat && (!prev || x.id !== prev.id))) { toast("Ya existe un camión con la patente " + fmtPatente(pat) + "."); return; }
+    const c = { ...(prev || {}), id: prev ? prev.id : uid(), patente: pat, marca: fd.marca.trim(), modelo: fd.modelo.trim(), anio: num(fd.anio), km: num(fd.km), intervalo: num(fd.intervalo) || 15000, notas: fd.notas.trim(), creado: prev?.creado || Date.now() };
+    delete c.ejemplo;
+    try { await Store.save("camiones", c); } catch { return; }
+    toast(prev ? "Camión actualizado" : "Camión agregado"); go("camion", { camionId: c.id });
+  });
+}
+
+function vHistorial() {
+  const F = UI.filtro; const q = F.q.trim().toLowerCase();
+  const regs = Store.registros.filter(r => (!F.tipo || r.tipo === F.tipo) && (!F.camionId || r.camionId === F.camionId) && (!F.estado || r.estado === F.estado) &&
+    (!q || [tituloRegistro(r), r.descripcion, r.responsable, camion(r.camionId)?.patente].join(" ").toLowerCase().includes(q))).sort(porFecha);
+  return `<section><h1>Historial</h1>
+    <div class="chips" role="group" aria-label="Filtrar por tipo"><button class="chip" data-filtro-tipo="" aria-pressed="${!F.tipo}">Todos</button>${Object.entries(TIPOS).map(([k, t]) => `<button class="chip" data-filtro-tipo="${k}" aria-pressed="${F.tipo === k}">${t.label}</button>`).join("")}</div>
+    <div class="grid2">
+      <label class="field"><span>Camión</span><select id="fil-camion" data-filtro="camionId"><option value="">Todos</option>${Store.camiones.map(c => `<option value="${esc(c.id)}" ${F.camionId === c.id ? "selected" : ""}>${esc(fmtPatente(c.patente))}</option>`).join("")}</select></label>
+      <label class="field"><span>Estado</span><select id="fil-estado" data-filtro="estado"><option value="">Todos</option>${ESTADOS.map(s => `<option ${F.estado === s ? "selected" : ""}>${s}</option>`).join("")}</select></label>
+    </div>
+    <label class="field"><span>Buscar</span><input id="fil-q" type="search" data-filtro="q" value="${esc(F.q)}" placeholder="Patente, sistema, responsable…"></label>
+    <span class="muted small">${regs.length} registro${regs.length === 1 ? "" : "s"}</span></section>
+    ${regs.length ? `<div class="panel list">${regs.map(r => itemRegistro(r)).join("")}</div>` : `<p class="muted">No hay registros con estos filtros.</p>`}`;
+}
+
+function vPlanilla() {
+  const n = t => Store.registros.filter(r => r.tipo === t).length;
+  return `<section><h1>Planilla Excel</h1>
+    <p class="muted" style="margin:0">Descarga toda la información en un archivo .xlsx con una hoja por tipo de registro. Cada hoja trae filtros listos para ordenar por patente, fecha o estado.</p></section>
+  <div class="panel" style="padding:16px;display:grid;gap:14px">
+    <ul class="sheetlist">
+      <li><span class="xl">XLS</span>Flota <span class="muted small">· ${Store.camiones.length} camiones, estado de aceite y fallas</span></li>
+      <li><span class="xl">XLS</span>Auditorías <span class="muted small">· ${n("auditoria")} · checklist punto por punto</span></li>
+      <li><span class="xl">XLS</span>Preventivas <span class="muted small">· ${n("preventiva")}</span></li>
+      <li><span class="xl">XLS</span>Correctivas <span class="muted small">· ${n("correctiva")}</span></li>
+      <li><span class="xl">XLS</span>Fallas <span class="muted small">· ${n("falla")}</span></li>
+      <li><span class="xl">XLS</span>Cambios de aceite <span class="muted small">· ${n("aceite")}</span></li>
+      <li><span class="xl">XLS</span>Todos los registros <span class="muted small">· ${Store.registros.length}</span></li>
+    </ul>
+    <button class="btn primary block" data-act="excel">Descargar planilla Excel</button>
+  </div>
+  <section><h2>Dónde se guardan los datos</h2>
+    <p class="muted" style="margin:0">${Store.mode === "shared"
+      ? "Los registros se guardan en la planilla compartida de esta página. Todas las personas con acceso ven y agregan a los mismos datos, desde cualquier teléfono."
+      : "Los registros se guardan en este teléfono, incluso sin internet. Descarga la planilla o un respaldo con frecuencia: si borras los datos del navegador se pierden."}</p>
+  </section>
+  <section><h2>Respaldo</h2>
+    <div class="grid2"><button class="btn" data-act="respaldo">Descargar respaldo</button><label class="btn" for="imp-json">Restaurar respaldo</label></div>
+    <input id="imp-json" type="file" accept="application/json,.json" hidden>
+    <span class="muted small">El respaldo (.json) sirve para pasar los datos a otro teléfono. Restaurar agrega o actualiza registros; no borra los existentes.</span>
+  </section>`;
+}
+
+/* ---------- Detalle (hoja inferior) ---------- */
+function verRegistro(id) {
+  const r = Store.registros.find(x => x.id === id); if (!r) return;
+  const c = camion(r.camionId);
+  const kv = (k, v) => v == null || v === "" ? "" : `<dt>${k}</dt><dd>${v}</dd>`;
+  let extra = "";
+  if (r.tipo === "auditoria") {
+    const p = puntaje(r.checklist);
+    const malos = CK_ITEMS.filter(([k]) => r.checklist?.[k] && r.checklist[k] !== "OK");
+    extra = kv("Resultado", `<b class="num">${p.pct}% OK</b> · ${p.ok} OK, ${p.obs} obs., ${p.falla} fallas`) +
+      kv("Observados", malos.length ? malos.map(([k, l]) => `<span class="pill ${r.checklist[k] === "Falla" ? "bad" : "warn"}">${r.checklist[k]}</span> ${esc(l)}`).join("<br>") : "Ninguno");
+  }
+  if (r.tipo === "preventiva") extra = kv("Servicio", esc(r.servicio)) + kv("Repuestos", esc(r.repuestos)) + kv("Próximo", r.proximoKm ? fmtKm(r.proximoKm) : "") + kv("Próxima fecha", r.proximaFecha ? fmtFecha(r.proximaFecha) : "");
+  if (r.tipo === "correctiva") extra = kv("Sistema", esc(r.sistema)) + kv("Causa", esc(r.causa)) + kv("Repuestos", esc(r.repuestos)) + kv("Horas taller", r.horas ?? "") + kv("Taller", esc(r.taller));
+  if (r.tipo === "falla") extra = kv("Sistema", esc(r.sistema)) + kv("Severidad", esc(r.severidad)) + kv("Camión detenido", r.detenido ? "Sí" : "No");
+  if (r.tipo === "aceite") extra = kv("Aceite", esc(r.tipoAceite)) + kv("Litros", r.litros ?? "") + kv("Filtros", FILTROS.filter(([k]) => r[k]).map(([, l]) => l).join(", ") || "Ninguno") + kv("Próximo cambio", fmtKm(r.proximoKm));
+  const sheet = `<div class="backdrop" data-act="cerrar"><div class="sheet" role="dialog" aria-modal="true" aria-label="Detalle del registro">
+    <div class="spread"><div class="row"><span class="tag ${esc(r.tipo)}">${TIPOS[r.tipo]?.code}</span><span class="eyebrow">${esc(TIPOS[r.tipo]?.label)}</span></div><button class="btn sm" data-act="cerrar">Cerrar</button></div>
+    <h3>${esc(tituloRegistro(r))}</h3>
+    ${c ? `<div class="row">${plate(c.patente)}<span class="small">${esc(c.marca || "")} ${esc(c.modelo || "")}</span></div>` : ""}
+    <dl class="kv">${kv("Fecha", fmtFecha(r.fecha))}${kv("Kilometraje", `<span class="num">${fmtKm(r.km)}</span>`)}${kv(r.tipo === "falla" ? "Reportado por" : "Responsable", esc(r.responsable))}${extra}${kv("Costo", r.costo ? fmtCLP(r.costo) : "")}${kv("Observaciones", esc(r.descripcion))}${kv("Cerrado el", r.cerrado ? fmtFecha(r.cerrado) : "")}</dl>
+    <div class="field"><span>Estado</span><div class="chips">${ESTADOS.map(s => `<button class="chip" data-act="estado" data-id="${esc(r.id)}" data-estado="${s}" aria-pressed="${r.estado === s}">${s}</button>`).join("")}</div></div>
+    <div class="grid2"><button class="btn" data-act="editar-reg" data-id="${esc(r.id)}">Editar</button><button class="btn danger" data-act="borrar-reg" data-id="${esc(r.id)}">Borrar</button></div>
+    <div id="confirm-reg"></div>
+  </div></div>`;
+  $("#overlay").innerHTML = sheet;
+}
+function closeSheet() { $("#overlay").innerHTML = ""; }
+
+/* ---------- Excel ---------- */
+async function guardarArchivo(filename, data) {
+  let dl = null;
+  if (window.claude && typeof window.claude.use === "function") { try { dl = await window.claude.use("downloads"); } catch { dl = null; } }
+  if (dl) {
+    try { await dl.save({ filename, data }); toast("Archivo guardado"); }
+    catch (e) { toast(e && e.code === "declined" ? "Descarga cancelada" : "No se pudo descargar en esta vista."); }
+    return;
+  }
+  const url = URL.createObjectURL(data instanceof Blob ? data : new Blob([data]));
+  const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000); toast("Archivo descargado");
+}
+
+function hoja(rows, headers) {
+  const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [Object.fromEntries(headers.map(h => [h, ""]))], { header: headers });
+  ws["!cols"] = headers.map(h => ({ wch: Math.min(48, Math.max(h.length + 2, ...rows.map(r => String(r[h] ?? "").length + 1))) }));
+  if (rows.length) ws["!autofilter"] = { ref: ws["!ref"] };
+  return ws;
+}
+
+async function exportarExcel() {
+  if (typeof XLSX === "undefined") { toast("No se cargó el generador de Excel. Revisa la conexión y vuelve a intentar."); return; }
+  const regs = [...Store.registros].sort(porFecha);
+  const pat = r => fmtPatente(camion(r.camionId)?.patente || r.patente || "");
+  const base = r => ({ "Fecha": r.fecha, "Patente": pat(r), "Km": r.km });
+  const sn = b => b ? "Sí" : "No";
+  const wb = XLSX.utils.book_new();
+
+  const flotaH = ["Patente", "Marca", "Modelo", "Año", "Km actual", "Intervalo aceite (km)", "Último cambio aceite", "Km último cambio", "Próximo cambio (km)", "Km restantes", "Estado aceite", "Fallas abiertas", "Última auditoría", "% OK última auditoría", "Estado", "Notas"];
+  XLSX.utils.book_append_sheet(wb, hoja(Store.camiones.map(c => {
+    const a = estadoAceite(c), au = ultimo(c.id, "auditoria");
+    return { "Patente": fmtPatente(c.patente), "Marca": c.marca, "Modelo": c.modelo, "Año": c.anio, "Km actual": c.km, "Intervalo aceite (km)": c.intervalo,
+      "Último cambio aceite": a.ultimo?.fecha || "", "Km último cambio": a.ultimo?.km ?? "", "Próximo cambio (km)": a.ultimo?.proximoKm ?? "", "Km restantes": a.restante ?? "",
+      "Estado aceite": a.nivel === "bad" ? "Vencido" : a.nivel === "warn" ? "Por vencer" : a.nivel === "ok" ? "Al día" : "Sin registro",
+      "Fallas abiertas": abiertas(c.id).length, "Última auditoría": au?.fecha || "", "% OK última auditoría": au ? puntaje(au.checklist).pct : "", "Estado": estadoCamion(c).texto, "Notas": c.notas || "" };
+  }), flotaH), "Flota");
+
+  const audH = ["Fecha", "Patente", "Km", "Auditor", "% OK", "OK", "Obs", "Fallas", ...CK_ITEMS.map(([, l]) => l), "Observaciones", "Estado"];
+  XLSX.utils.book_append_sheet(wb, hoja(regs.filter(r => r.tipo === "auditoria").map(r => {
+    const p = puntaje(r.checklist);
+    return { ...base(r), "Auditor": r.responsable, "% OK": p.pct, "OK": p.ok, "Obs": p.obs, "Fallas": p.falla, ...Object.fromEntries(CK_ITEMS.map(([k, l]) => [l, r.checklist?.[k] || ""])), "Observaciones": r.descripcion, "Estado": r.estado };
+  }), audH), "Auditorías");
+
+  const preH = ["Fecha", "Patente", "Km", "Responsable", "Servicio", "Repuestos", "Próximo (km)", "Próxima fecha", "Costo CLP", "Estado", "Observaciones"];
+  XLSX.utils.book_append_sheet(wb, hoja(regs.filter(r => r.tipo === "preventiva").map(r => ({ ...base(r), "Responsable": r.responsable, "Servicio": r.servicio, "Repuestos": r.repuestos, "Próximo (km)": r.proximoKm ?? "", "Próxima fecha": r.proximaFecha || "", "Costo CLP": r.costo ?? "", "Estado": r.estado, "Observaciones": r.descripcion })), preH), "Preventivas");
+
+  const corH = ["Fecha", "Patente", "Km", "Responsable", "Sistema", "Causa", "Repuestos", "Horas taller", "Taller", "Costo CLP", "Estado", "Fecha cierre", "Observaciones"];
+  XLSX.utils.book_append_sheet(wb, hoja(regs.filter(r => r.tipo === "correctiva").map(r => ({ ...base(r), "Responsable": r.responsable, "Sistema": r.sistema, "Causa": r.causa, "Repuestos": r.repuestos, "Horas taller": r.horas ?? "", "Taller": r.taller, "Costo CLP": r.costo ?? "", "Estado": r.estado, "Fecha cierre": r.cerrado || "", "Observaciones": r.descripcion })), corH), "Correctivas");
+
+  const falH = ["Fecha", "Patente", "Km", "Reportado por", "Sistema", "Severidad", "Camión detenido", "Estado", "Fecha cierre", "Descripción"];
+  XLSX.utils.book_append_sheet(wb, hoja(regs.filter(r => r.tipo === "falla").map(r => ({ ...base(r), "Reportado por": r.responsable, "Sistema": r.sistema, "Severidad": r.severidad, "Camión detenido": sn(r.detenido), "Estado": r.estado, "Fecha cierre": r.cerrado || "", "Descripción": r.descripcion })), falH), "Fallas");
+
+  const aceH = ["Fecha", "Patente", "Km", "Responsable", "Aceite", "Litros", ...FILTROS.map(([, l]) => l), "Próximo cambio (km)", "Costo CLP", "Observaciones"];
+  XLSX.utils.book_append_sheet(wb, hoja(regs.filter(r => r.tipo === "aceite").map(r => ({ ...base(r), "Responsable": r.responsable, "Aceite": r.tipoAceite, "Litros": r.litros ?? "", ...Object.fromEntries(FILTROS.map(([k, l]) => [l, sn(r[k])])), "Próximo cambio (km)": r.proximoKm ?? "", "Costo CLP": r.costo ?? "", "Observaciones": r.descripcion })), aceH), "Cambios de aceite");
+
+  const allH = ["Fecha", "Tipo", "Patente", "Km", "Responsable", "Detalle", "Estado", "Costo CLP", "Observaciones"];
+  XLSX.utils.book_append_sheet(wb, hoja(regs.map(r => ({ "Fecha": r.fecha, "Tipo": TIPOS[r.tipo]?.label, "Patente": pat(r), "Km": r.km, "Responsable": r.responsable, "Detalle": tituloRegistro(r), "Estado": r.estado, "Costo CLP": r.costo ?? "", "Observaciones": r.descripcion })), allH), "Todos los registros");
+
+  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  await guardarArchivo(`Bitacora_Flota_${hoy()}.xlsx`, new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+}
+
+async function importarJSON(file) {
+  try {
+    const d = JSON.parse(await file.text());
+    if (!Array.isArray(d.camiones) || !Array.isArray(d.registros)) throw new Error("formato");
+    for (const c of d.camiones) await Store.save("camiones", c);
+    for (const r of d.registros) await Store.save("registros", r);
+    toast(`Respaldo restaurado: ${d.camiones.length} camiones, ${d.registros.length} registros`);
+  } catch { toast("El archivo no es un respaldo válido de Bitácora de Flota."); }
+}
+
+/* ---------- Eventos ---------- */
+document.addEventListener("click", async e => {
+  const nav = e.target.closest("[data-nav]"); if (nav) { go(nav.dataset.nav); return; }
+  const nl = e.target.closest("[data-nav-link]"); if (nl) { go(nl.dataset.navLink); return; }
+  const ft = e.target.closest("[data-filtro-tipo]"); if (ft) { UI.filtro.tipo = ft.dataset.filtroTipo; render(); return; }
+  const el = e.target.closest("[data-act]"); if (!el) return;
+  const id = el.dataset.id;
+  switch (el.dataset.act) {
+    case "cerrar": if (e.target === el || el.tagName === "BUTTON") closeSheet(); break;
+    case "ver-reg": verRegistro(id); break;
+    case "ver-camion": go("camion", { camionId: id }); break;
+    case "nuevo-camion": go("camion-form"); break;
+    case "editar-camion": go("camion-form", { camionId: id }); break;
+    case "volver-camion": UI.camionId ? go("camion", { camionId: UI.camionId }) : go("flota"); break;
+    case "registrar": go("nuevo", { form: { tipo: el.dataset.tipo || "auditoria", camionId: el.dataset.camion || "" } }); break;
+    case "limpiar": UI.form = { tipo: (UI.form && UI.form.tipo) || leerFormRegistro().tipo }; $("#app").innerHTML = vNuevo(); wireRegistroForm(); break;
+    case "cancelar-edicion": { const cid = UI.form?.camionId; UI.form = null; go(cid ? "camion" : "historial", cid ? { camionId: cid } : {}); break; }
+    case "editar-reg": { const r = Store.registros.find(x => x.id === id); if (r) go("nuevo", { form: JSON.parse(JSON.stringify(r)) }); break; }
+    case "borrar-reg": $("#confirm-reg").innerHTML = `<div class="confirm">¿Borrar este registro? No se puede deshacer.<div class="grid2"><button class="btn" data-act="no-borrar-reg">Cancelar</button><button class="btn danger solid" data-act="borrar-reg-ok" data-id="${esc(id)}">Sí, borrar</button></div></div>`; break;
+    case "no-borrar-reg": $("#confirm-reg").innerHTML = ""; break;
+    case "borrar-reg-ok": try { await Store.remove("registros", id); closeSheet(); toast("Registro borrado"); render(); } catch {} break;
+    case "estado": {
+      const r = Store.registros.find(x => x.id === id); if (!r) break;
+      const n = { ...r, estado: el.dataset.estado }; if (n.estado === "Cerrado") n.cerrado = n.cerrado || hoy(); else delete n.cerrado;
+      try { await Store.save("registros", n); toast("Estado: " + n.estado); verRegistro(id); } catch {} break;
+    }
+    case "borrar-camion": UI.confirm = "camion"; render(); break;
+    case "cancelar": UI.confirm = null; render(); break;
+    case "borrar-camion-ok": try { for (const r of registrosDe(id)) await Store.remove("registros", r.id); await Store.remove("camiones", id); toast("Camión borrado"); go("flota"); } catch {} break;
+    case "borrar-ejemplos": try { for (const r of Store.registros.filter(x => x.ejemplo)) await Store.remove("registros", r.id); for (const c of Store.camiones.filter(x => x.ejemplo)) await Store.remove("camiones", c.id); toast("Ejemplos borrados"); render(); } catch {} break;
+    case "cargar-ejemplos": { const s = ejemplo(); try { for (const c of s.camiones) await Store.save("camiones", c); for (const r of s.registros) await Store.save("registros", r); toast("Ejemplo cargado"); } catch {} break; }
+    case "excel": exportarExcel(); break;
+    case "respaldo": guardarArchivo(`Bitacora_Flota_respaldo_${hoy()}.json`, new Blob([JSON.stringify({ app: "bitacora-flota", version: 1, exportado: new Date().toISOString(), camiones: Store.camiones, registros: Store.registros }, null, 1)], { type: "application/json" })); break;
+  }
+});
+document.addEventListener("input", e => {
+  const f = e.target.closest("[data-filtro]"); if (!f) return;
+  UI.filtro[f.dataset.filtro] = f.value;
+  if (f.dataset.filtro === "q") { clearTimeout(UI._q); UI._q = setTimeout(() => { render(); const q = $("#fil-q"); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 250); }
+  else render();
+});
+document.addEventListener("change", e => { if (e.target.id === "imp-json" && e.target.files[0]) { importarJSON(e.target.files[0]); e.target.value = ""; } });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
+
+/* ---------- Inicio ---------- */
+render();
+Store.init().then(() => { if (Store.mode === "local") UI.conectando = false; render(); });
+if ("serviceWorker" in navigator && !window.claude && /^https?:$/.test(location.protocol)) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+</script>
+<!--APP-END-->
+</body>
+</html>
