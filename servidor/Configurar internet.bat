@@ -9,7 +9,7 @@ echo 2. Copia tu Authtoken:      https://dashboard.ngrok.com/get-started/your-au
 echo 3. Crea tu dominio gratis:  https://dashboard.ngrok.com/domains  (boton "New Domain")
 echo.
 set /p TOKEN=Pega aqui tu Authtoken y presiona Enter: 
-set /p DOMINIO=Escribe tu dominio (ejemplo mi-flota.ngrok-free.app) y presiona Enter: 
+set /p DOMINIO=Escribe tu dominio (ejemplo mi-flota.ngrok-free.dev) y presiona Enter: 
 echo.
 echo Listo. Desde ahora basta con abrir "Iniciar Bitacora.bat".
 call "Iniciar Bitacora.bat" --ngrok-token "%TOKEN%" --dominio "%DOMINIO%"

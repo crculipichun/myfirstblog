@@ -23,7 +23,11 @@ if [ ! -s "$H/xlsx.full.min.js" ]; then
 fi
 
 # 1. Página: la misma index.html, con la librería de Excel incluida para que funcione sin internet
-sed 's#https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js#xlsx.full.min.js#' ../index.html > "$B/assets/www/index.html"
+# SERVIDOR y CODIGO (opcionales) dejan el APK conectado de fábrica: los choferes solo lo instalan.
+#   SERVIDOR=https://mi-flota.ngrok-free.dev/ CODIGO=ABC123 ./construir-apk.sh
+sed -e 's#https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js#xlsx.full.min.js#' \
+    -e "s#const SERVIDOR_FIJO = \"\", CODIGO_FIJO = \"\";#const SERVIDOR_FIJO = \"${SERVIDOR:-}\", CODIGO_FIJO = \"${CODIGO:-}\";#" \
+    ../index.html > "$B/assets/www/index.html"
 cp "$H/xlsx.full.min.js" ../icon.svg "$B/assets/www/"
 cp ../icon-192.png "$B/res/mipmap-xxxhdpi/ic_launcher.png"
 cp -r res/values "$B/res/"
@@ -31,7 +35,7 @@ cp -r res/values "$B/res/"
 # 2. Recursos y manifiesto
 "$H/aapt2" compile --dir "$B/res" -o "$B/res.zip"
 "$H/aapt2" link -o "$B/base.apk" -I "$H/android-all.jar" --manifest AndroidManifest.xml -A "$B/assets" \
-  --min-sdk-version 24 --target-sdk-version 34 --version-code "${VERSION_CODE:-3}" --version-name "${VERSION_NAME:-1.2}" "$B/res.zip"
+  --min-sdk-version 24 --target-sdk-version 34 --version-code "${VERSION_CODE:-4}" --version-name "${VERSION_NAME:-1.3}" "$B/res.zip"
 
 # 3. Código Java -> dex
 javac -nowarn -Xlint:-options --release 8 -cp "$H/android-all.jar" -d "$B/clases" src/cl/bitacoraflota/MainActivity.java

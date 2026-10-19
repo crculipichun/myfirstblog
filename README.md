@@ -33,13 +33,13 @@ El computador de la oficina o taller guarda la planilla `Bitacora_Flota.xlsx`. *
 3. **Conexión por internet (gratis, con ngrok):**
    1. Crea una cuenta en https://dashboard.ngrok.com/signup
    2. Copia tu *Authtoken* en https://dashboard.ngrok.com/get-started/your-authtoken
-   3. Crea tu dominio fijo gratuito en https://dashboard.ngrok.com/domains (botón *New Domain*). Queda algo como `mi-flota.ngrok-free.app`.
+   3. Crea tu dominio fijo gratuito en https://dashboard.ngrok.com/domains (botón *New Domain*). Queda algo como `mi-flota.ngrok-free.dev`.
    4. En la carpeta `servidor`, haz doble clic en **`Configurar internet.bat`**, pega el Authtoken y el dominio. Se guardan para siempre.
 
 **Usar cada día:**
 1. En la carpeta `servidor`, haz doble clic en **`Iniciar Bitacora.bat`** (en Mac/Linux: `./iniciar.sh`). Si Windows pregunta por el Firewall, permite el acceso.
 2. La ventana muestra:
-   - el **link para los celulares**, por ejemplo `https://mi-flota.ngrok-free.app/?c=K7PQ3M`. Envíalo por WhatsApp a todos los que van a registrar;
+   - el **link para los celulares**, por ejemplo `https://mi-flota.ngrok-free.dev/?c=K7PQ3M`. Envíalo por WhatsApp a todos los que van a registrar;
    - el **código de acceso** (`K7PQ3M`), que va incluido en el link;
    - el **PIN de administrador**, solo para quien agrega y edita camiones.
 3. Deja la ventana abierta mientras se trabaje. La planilla queda en `Documentos\Bitacora Flota\Bitacora_Flota.xlsx`.
@@ -77,7 +77,7 @@ El computador de la oficina o taller guarda la planilla `Bitacora_Flota.xlsx`. *
 2. Abre **Bitácora Flota**, toca **Ajustes y conexión**, pega el link que muestra la ventana del computador y toca *Conectar*.
 3. La app funciona sin señal: los registros quedan en el celular y se envían solos cuando vuelve la conexión.
 
-Para volver a generar el APK (Linux o macOS, con Java 17+, Python 3 y npm): `android/construir-apk.sh`. Guarda el archivo `android/firma-bitacora.p12`: para instalar una versión nueva encima de la anterior, sin perder datos, el APK tiene que firmarse con la misma llave.
+Para volver a generar el APK (Linux o macOS, con Java 17+, Python 3 y npm): `android/construir-apk.sh`. Para que salga ya conectado al computador, sin que los choferes configuren nada: `SERVIDOR=https://mi-flota.ngrok-free.dev/ CODIGO=ABC123 android/construir-apk.sh` (usa el mismo código que el computador: `servidor.py --codigo ABC123`). Guarda el archivo `android/firma-bitacora.p12`: para instalar una versión nueva encima de la anterior, sin perder datos, el APK tiene que firmarse con la misma llave.
 
 ## Usar tu propio Excel
 

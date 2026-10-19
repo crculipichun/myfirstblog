@@ -6,7 +6,7 @@ planilla Excel que se actualiza sola. Con ngrok (gratis) los celulares pueden
 enviar desde cualquier lugar con internet, no solo desde el Wi-Fi de la oficina.
 
 Uso:  python servidor.py [--carpeta RUTA] [--puerto 8080] [--pin 1234]
-                         [--ngrok-token TOKEN --dominio mi-flota.ngrok-free.app]
+                         [--ngrok-token TOKEN --dominio mi-flota.ngrok-free.dev]
 """
 import argparse
 import datetime as dt
@@ -460,7 +460,7 @@ def main():
     ap.add_argument("--pin", help="Cambia el PIN de administrador")
     ap.add_argument("--codigo", help="Cambia el código de acceso que usan los celulares")
     ap.add_argument("--ngrok-token", help="Authtoken de tu cuenta ngrok (se guarda, basta darlo una vez)")
-    ap.add_argument("--dominio", help="Dominio fijo gratuito de ngrok, por ejemplo mi-flota.ngrok-free.app")
+    ap.add_argument("--dominio", help="Dominio fijo gratuito de ngrok, por ejemplo mi-flota.ngrok-free.dev")
     args = ap.parse_args()
     carpeta = Path(args.carpeta).expanduser()
     carpeta.mkdir(parents=True, exist_ok=True)

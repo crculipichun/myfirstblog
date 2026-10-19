@@ -347,6 +347,9 @@ const sget = k => { try { return localStorage.getItem(k); } catch { return null;
 const sset = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 const sdel = k => { try { localStorage.removeItem(k); } catch {} };
 const EN_APK = location.protocol === "file:";
+// El APK de la empresa se construye con la dirección del computador y el código ya puestos (ver android/construir-apk.sh)
+const SERVIDOR_FIJO = "", CODIGO_FIJO = "";
+const codigoAcceso = () => sget("bf_codigo") || CODIGO_FIJO;
 // El link que entrega el computador trae el código de acceso: .../?c=ABC123
 (() => { try { const q = new URLSearchParams(location.search); const c = q.get("c"); if (c) { localStorage.setItem("bf_codigo", c.trim().toUpperCase()); history.replaceState(null, "", location.pathname); } } catch {} })();
 
@@ -374,8 +377,10 @@ const Store = {
     }
     this.cargarLocal();
     const enPC = this.base() !== null && await this.pedir("GET", this.url("api/estado")).then(r => r && r.app === "bitacora-flota").catch(() => false);
-    if (enPC && !sget("bf_codigo")) this.pc.codigoMal = true;
-    if (enPC || (this.base() !== null && sget("bf_pc") === "1")) {
+    if (enPC && !codigoAcceso()) this.pc.codigoMal = true;
+    if (enPC || (this.base() !== null && (sget("bf_pc") === "1" || (EN_APK && SERVIDOR_FIJO)))) {
+      // Sin señal en el primer uso igual se puede auditar: la flota de la empresa viene incluida
+      if (!this.camiones.length) this.camiones = FLOTA_INICIAL.map(c => ({ ...c }));
       this.iniciarPC(); await this.sync();
     } else if (!sget("bf_data") && !sget("bf_seeded")) {
       this.camiones = FLOTA_INICIAL.map(c => ({ ...c, creado: Date.now() })); this.registros = []; sset("bf_seeded", "1"); this.persist();
@@ -384,7 +389,7 @@ const Store = {
     this.badge();
   },
   // En la app Android (file://) la dirección del computador se configura; servida desde el computador es la misma página.
-  base() { return EN_APK ? (sget("bf_server") || null) : ""; },
+  base() { return EN_APK ? (sget("bf_server") || SERVIDOR_FIJO || null) : ""; },
   url(p) { return (this.base() || "") + p; },
   iniciarPC() {
     this.mode = "pc"; sset("bf_pc", "1"); UI.admin = !!sget("bf_pin");
@@ -394,12 +399,12 @@ const Store = {
     window.addEventListener("online", () => this.sync());
     document.addEventListener("visibilitychange", () => { if (!document.hidden) this.sync(); });
   },
-  // Acepta el link del computador (https://mi-flota.ngrok-free.app/?c=ABC123), un dominio o una IP de la red local.
+  // Acepta el link del computador (https://mi-flota.ngrok-free.dev/?c=ABC123), un dominio o una IP de la red local.
   async conectar(dir, codigo) {
     let u = String(dir || "").trim(); if (!u) { toast("Escribe la dirección o pega el link que entrega el computador."); return; }
     const m = u.match(/[?&]c=([A-Za-z0-9]+)/); if (m) { codigo = codigo || m[1]; u = u.replace(/\?.*$/, ""); }
     if (codigo) sset("bf_codigo", String(codigo).trim().toUpperCase());
-    if (!sget("bf_codigo")) { toast("Escribe el código de acceso que muestra la ventana del computador."); return; }
+    if (!codigoAcceso()) { toast("Escribe el código de acceso que muestra la ventana del computador."); return; }
     const local = /^(https?:\/\/)?(localhost|\d{1,3}(\.\d{1,3}){3})(:|\/|$)/i.test(u);
     if (!/^https?:\/\//i.test(u)) u = (local ? "http://" : "https://") + u;
     if (local && !/:\d+(\/|$)/.test(u.replace(/^https?:\/\//i, ""))) u = u.replace(/\/*$/, "") + ":8080";
@@ -428,7 +433,7 @@ const Store = {
   async pedir(method, url, body) {
     const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 15000);
     try {
-      const headers = { "X-Codigo": sget("bf_codigo") || "", "ngrok-skip-browser-warning": "1" };
+      const headers = { "X-Codigo": codigoAcceso(), "ngrok-skip-browser-warning": "1" };
       if (body) headers["Content-Type"] = "application/json";
       const r = await fetch(url, { method, signal: ac.signal, cache: "no-store", headers, body: body ? JSON.stringify(body) : undefined });
       if (!r.ok) { const e = new Error("HTTP " + r.status); e.status = r.status; throw e; }
@@ -958,11 +963,11 @@ function tarjetasConexion() {
       : P.pendiente ? esc(P.error || "La planilla está abierta en Excel. Ciérrala en el computador y se actualizará sola.")
       : `Cada registro se agrega solo a la planilla.${P.ultima ? " Última actualización: " + esc(P.ultima.replace("T", " ")) : ""}`}</span>
     <button class="btn" data-act="sync">Enviar ahora</button></div>`;
-  const srvCard = !EN_APK && !(Store.mode === "pc" && (P.codigoMal || !sget("bf_codigo"))) ? "" : `<div class="panel" style="padding:16px;display:grid;gap:10px">
+  const srvCard = !EN_APK && !(Store.mode === "pc" && (P.codigoMal || !codigoAcceso())) ? "" : `<div class="panel" style="padding:16px;display:grid;gap:10px">
     <div class="spread"><h3>Conexión con el computador</h3>${P.codigoMal ? `<span class="pill bad">Código incorrecto</span>` : ""}</div>
     <span class="small muted">${EN_APK ? "Pega el link que muestra la ventana del programa en el computador, o escribe la dirección y el código de acceso. Funciona con cualquier conexión a internet." : "Escribe el código de acceso que muestra la ventana del programa en el computador."}</span>
-    ${EN_APK ? `<label class="field"><span>Link o dirección</span><input id="srv-url" inputmode="url" autocapitalize="none" autocomplete="off" placeholder="mi-flota.ngrok-free.app" value="${esc((sget("bf_server") || "").replace(/^https?:\/\//, "").replace(/\/$/, ""))}"></label>` : ""}
-    <label class="field"><span>Código de acceso</span><input id="srv-codigo" autocapitalize="characters" autocomplete="off" placeholder="Ej. K7PQ3M" value="${esc(sget("bf_codigo") || "")}"></label>
+    ${EN_APK ? `<label class="field"><span>Link o dirección</span><input id="srv-url" inputmode="url" autocapitalize="none" autocomplete="off" placeholder="mi-flota.ngrok-free.dev" value="${esc((sget("bf_server") || SERVIDOR_FIJO).replace(/^https?:\/\//, "").replace(/\/$/, ""))}"></label>` : ""}
+    <label class="field"><span>Código de acceso</span><input id="srv-codigo" autocapitalize="characters" autocomplete="off" placeholder="Ej. K7PQ3M" value="${esc(codigoAcceso())}"></label>
     <button class="btn primary" data-act="${EN_APK ? "conectar" : "codigo"}">${EN_APK && Store.mode === "pc" ? "Guardar conexión" : "Conectar"}</button></div>`;
   const adminCard = `<div class="panel" style="padding:16px;display:grid;gap:10px">
     <div class="spread"><h3>Administrador</h3>${UI.admin ? `<span class="pill ok">Activo</span>` : ""}</div>
