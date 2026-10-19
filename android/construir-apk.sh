@@ -35,7 +35,7 @@ cp -r res/values "$B/res/"
 # 2. Recursos y manifiesto
 "$H/aapt2" compile --dir "$B/res" -o "$B/res.zip"
 "$H/aapt2" link -o "$B/base.apk" -I "$H/android-all.jar" --manifest AndroidManifest.xml -A "$B/assets" \
-  --min-sdk-version 24 --target-sdk-version 34 --version-code "${VERSION_CODE:-7}" --version-name "${VERSION_NAME:-1.6}" "$B/res.zip"
+  --min-sdk-version 24 --target-sdk-version 34 --version-code "${VERSION_CODE:-8}" --version-name "${VERSION_NAME:-1.7}" "$B/res.zip"
 
 # 3. Código Java -> dex
 javac -nowarn -Xlint:-options --release 8 -cp "$H/android-all.jar" -d "$B/clases" src/cl/bitacoraflota/MainActivity.java
