@@ -42,15 +42,6 @@ COLECCIONES = ("camiones", "registros")
 # Catálogos: deben coincidir con index.html
 TIPOS = {"auditoria": "Auditoría", "preventiva": "Mant. preventiva", "correctiva": "Mant. correctiva",
          "falla": "Falla", "aceite": "Cambio de aceite", "odometro": "Lectura de odómetro"}
-CK_ITEMS = [
-    ("frenoServicio", "Frenos de servicio / balatas"), ("frenoAire", "Sistema de aire (fugas, presión)"), ("frenoEstac", "Freno de estacionamiento"),
-    ("neuPresion", "Presión de inflado"), ("neuBanda", "Desgaste de banda"), ("neuPernos", "Pernos y tuercas de rueda"),
-    ("luzFocos", "Focos altos y bajos"), ("luzInterm", "Intermitentes y balizas"), ("luzFreno", "Luces de freno y retroceso"),
-    ("motAceite", "Nivel de aceite"), ("motRefri", "Nivel de refrigerante"), ("motFugas", "Fugas visibles"), ("motCorreas", "Correas y mangueras"),
-    ("cabCinturon", "Cinturones de seguridad"), ("cabExtintor", "Extintor vigente"), ("cabKit", "Botiquín, triángulos y chaleco"),
-    ("cabEspejos", "Espejos"), ("cabBocina", "Bocina y alarma de retroceso"), ("cabLimpia", "Limpiaparabrisas"),
-    ("docRevision", "Revisión técnica al día"), ("docPermiso", "Permiso de circulación"), ("docSoap", "SOAP vigente"),
-]
 FILTROS = [("fAceite", "Filtro de aceite"), ("fAire", "Filtro de aire"), ("fComb", "Filtro de combustible"), ("fSep", "Separador de agua")]
 DOCS = [("vRevision", "Revisión técnica"), ("vPermiso", "Permiso de circulación"), ("vSoap", "SOAP"), ("vExtintor", "Extintor")]
 
@@ -188,18 +179,11 @@ def orden(r):
     return (r.get("fecha") or "", r.get("km") or 0, r.get("creado") or 0)
 
 
-def puntaje(ck):
-    ck = ck or {}
-    vals = [ck.get(k) for k, _ in CK_ITEMS if ck.get(k)]
-    ok, obs, falla = vals.count("OK"), vals.count("Obs"), vals.count("Falla")
-    return {"ok": ok, "obs": obs, "falla": falla, "pct": round(ok / len(vals) * 100) if vals else 0}
-
-
 def titulo(r):
     t = r.get("tipo")
     if t == "auditoria":
-        p = puntaje(r.get("checklist"))
-        return f"Auditoría · {p['pct']}% OK" + (f" · {p['falla']} fallas" if p["falla"] else "") + (f" · {p['obs']} obs." if p["obs"] else "")
+        dh = ("deshielo hecho" if r.get("deshieloHecho") else "necesita deshielo") if r.get("deshielo") else "sin deshielo"
+        return f"Auditoría · {dh}" + (f" · mant. {r['proximaMant']:,} km".replace(",", ".") if isinstance(r.get("proximaMant"), (int, float)) else "")
     if t == "preventiva":
         return r.get("servicio") or "Mantención preventiva"
     if t == "correctiva":
@@ -234,11 +218,21 @@ def construir_excel(d):
     def doc_vencido(c):
         return any(fecha(c.get(k)) and fecha(c.get(k)) < hoy for k, _ in DOCS)
 
+    def mantencion(c):
+        u = next((r for r in regs if r.get("camionId") == c["id"] and r.get("tipo") == "auditoria" and isinstance(r.get("proximaMant"), (int, float))), None)
+        if not u:
+            return None, None
+        return u["proximaMant"], u["proximaMant"] - (km_de(c, regs) or 0)
+
+    def deshielo(c):
+        au = de(c["id"], "auditoria")
+        return bool(au and au.get("deshielo") and not au.get("deshieloHecho"))
+
     def estado(c):
         f = abiertas(c["id"])
         if any(x.get("detenido") for x in f):
             return "Detenido"
-        if f or aceite(c)[2] in ("Vencido", "Por vencer") or doc_vencido(c):
+        if f or aceite(c)[2] in ("Vencido", "Por vencer") or doc_vencido(c) or deshielo(c) or (mantencion(c)[1] is not None and mantencion(c)[1] <= 0):
             return "Revisar"
         return "Operativo"
 
@@ -284,19 +278,27 @@ def construir_excel(d):
     for c in sorted(camiones.values(), key=interno):
         u, rest, est_ac = aceite(c)
         au = de(c["id"], "auditoria")
-        filas.append([patente(c.get("patente")), c.get("interno"), c.get("tipoCamion"), c.get("marca"), c.get("modelo"), c.get("anio"),
-                      c.get("color"), c.get("vin"), c.get("motor"), km_de(c, regs), horo_de(c, regs), c.get("conductor"), c.get("faena"),
-                      c.get("intervalo"), fecha(u.get("fecha")) if u else None, u.get("km") if u else None, u.get("proximoKm") if u else None,
-                      rest, est_ac, len(abiertas(c["id"])), fecha(au.get("fecha")) if au else None, puntaje(au.get("checklist"))["pct"] if au else None,
-                      *[fecha(c.get(k)) for k, _ in DOCS], c.get("estanque"), c.get("neumaticos"), estado(c), c.get("notas")])
-    hoja("Flota", ["Patente", "N° interno", "Tipo", "Marca", "Modelo", "Año", "Color", "VIN / N° chasis", "N° motor", "Odómetro (km)",
+        prox, falta = mantencion(c)
+        filas.append([c.get("interno"), patente(c.get("patente")), c.get("tipoCamion"), c.get("marca"), c.get("modelo"), c.get("anio"),
+                      km_de(c, regs), prox, falta, ("Sí" if deshielo(c) else "No") if au else None, fecha(au.get("fecha")) if au else None,
+                      au.get("responsable") if au else None, estado(c),
+                      horo_de(c, regs), c.get("conductor"), c.get("faena"), c.get("intervalo"), fecha(u.get("fecha")) if u else None,
+                      u.get("km") if u else None, u.get("proximoKm") if u else None, rest, est_ac, len(abiertas(c["id"])),
+                      *[fecha(c.get(k)) for k, _ in DOCS], c.get("color"), c.get("vin"), c.get("motor"), c.get("estanque"), c.get("neumaticos"), c.get("notas")])
+    hoja("Flota", ["N° interno", "Patente", "Tipo", "Marca", "Modelo", "Año", "Odómetro (km)", "Próxima mantención (km)", "Km para mantención",
+                   "Necesita deshielo", "Última auditoría", "Responsable última auditoría", "Estado",
                    "Horómetro (h)", "Conductor", "Faena / centro de costo", "Intervalo aceite (km)", "Último cambio aceite", "Km último cambio",
-                   "Próximo cambio (km)", "Km restantes", "Estado aceite", "Fallas abiertas", "Última auditoría", "% OK última auditoría",
-                   *[f"Vence {l}" for _, l in DOCS], "Estanque (L)", "Neumáticos", "Estado", "Notas"], filas)
+                   "Próximo cambio (km)", "Km restantes", "Estado aceite", "Fallas abiertas",
+                   *[f"Vence {l}" for _, l in DOCS], "Color", "VIN / N° chasis", "N° motor", "Estanque (L)", "Neumáticos", "Notas"], filas)
 
-    hoja("Auditorías", ["Fecha", "Patente", "Odómetro (km)", "Auditor", "% OK", "OK", "Obs", "Fallas", *[l for _, l in CK_ITEMS], "Observaciones", "Estado"],
-         [[*base(r), r.get("responsable"), *(lambda p: [p["pct"], p["ok"], p["obs"], p["falla"]])(puntaje(r.get("checklist"))),
-           *[(r.get("checklist") or {}).get(k, "") for k, _ in CK_ITEMS], r.get("descripcion"), r.get("estado")]
+    def vehiculo(r):
+        c = camiones.get(r.get("camionId")) or {}
+        return c.get("interno"), " ".join(x for x in (c.get("marca"), c.get("modelo")) if x)
+
+    hoja("Auditorías", ["Fecha", "N° interno", "Patente", "Vehículo", "Odómetro (km)", "Próxima mantención (km)", "Km para mantención", "Responsable", "Necesita deshielo", "Deshielo realizado"],
+         [[fecha(r.get("fecha")), vehiculo(r)[0], pat(r), vehiculo(r)[1], r.get("km"), r.get("proximaMant"),
+           r["proximaMant"] - r["km"] if isinstance(r.get("proximaMant"), (int, float)) and isinstance(r.get("km"), (int, float)) else None,
+           r.get("responsable"), sn(r.get("deshielo")), fecha(r.get("deshieloHecho"))]
           for r in regs if r.get("tipo") == "auditoria"])
     hoja("Preventivas", ["Fecha", "Patente", "Odómetro (km)", "Responsable", "Servicio", "Repuestos", "Próximo (km)", "Próxima fecha", "Costo CLP", "Estado", "Observaciones"],
          [[*base(r), r.get("responsable"), r.get("servicio"), r.get("repuestos"), r.get("proximoKm"), fecha(r.get("proximaFecha")), r.get("costo"), r.get("estado"), r.get("descripcion")]

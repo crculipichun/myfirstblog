@@ -1,8 +1,16 @@
 # Bitácora de Flota
 
-App móvil (web instalable / PWA) para auditar camiones y controlar:
+App móvil para auditar las camionetas frigoríficas de la flota (Mitsubishi Fuso Canter 413, Kia Frontier 2,5, Hyundai Porter).
 
-- **Auditorías** con checklist de 22 puntos (frenos, neumáticos, luces, motor, cabina y seguridad, documentos: revisión técnica, permiso de circulación, SOAP), cada uno OK / Obs / Falla y porcentaje de cumplimiento.
+**Para los choferes es una sola pantalla:** eligen el camión (por N° o patente) y completan 4 datos:
+1. Odómetro (km)
+2. Próxima mantención (km), que viene precargada con la última informada
+3. Responsable de la auditoría (el celular lo recuerda)
+4. ¿Necesita deshielo? Sí / No
+
+Tocan **Enviar auditoría** y llega a la planilla Excel del computador.
+
+**El administrador** (con PIN) ve además el panel completo, con avisos de deshielo pendiente y de mantención a 1.000 km o atrasada, y puede registrar:
 - **Mantenciones preventivas** (servicio, repuestos, próximo km y próxima fecha).
 - **Mantenciones correctivas** (sistema, causa, repuestos, horas de taller, taller, costo).
 - **Fallas** (sistema, severidad, camión detenido, estado Pendiente / En proceso / Cerrado).
@@ -11,9 +19,9 @@ App móvil (web instalable / PWA) para auditar camiones y controlar:
 
 Cada camión tiene su **ficha**: patente, N° interno, tipo, marca, modelo, año, color, VIN / N° chasis, N° motor, odómetro, horómetro, intervalo de aceite, estanque, medida de neumáticos, conductor, faena y vencimientos de revisión técnica, permiso de circulación, SOAP y extintor (con aviso 30 días antes).
 
-La flota de la empresa (N° 1 al 17 y 815) viene cargada desde el inicio. **Solo el administrador** puede agregar, editar o borrar camiones; los demás usuarios registran auditorías, mantenciones, fallas, aceite y lecturas de odómetro.
+La flota de la empresa (N° 1 al 17 y 815) viene cargada desde el inicio. **Solo el administrador** puede agregar, editar o borrar camiones; los choferes solo ven la pantalla de auditoría.
 
-La pantalla de inicio avisa qué requiere atención: aceite vencido o por vencer (a 1.500 km), fallas abiertas, camiones detenidos, preventivas próximas y camiones sin auditoría en 30 días.
+La pantalla de inicio del administrador avisa qué requiere atención: deshielo pendiente (con botón *Hecho*), mantención próxima o atrasada, aceite por vencer, fallas abiertas, camiones detenidos y camiones sin auditoría en 30 días.
 
 ## La planilla Excel en el computador (recomendado)
 
@@ -38,9 +46,9 @@ El computador de la oficina o taller guarda la planilla `Bitacora_Flota.xlsx`. *
    Para usar otra carpeta (por ejemplo una de OneDrive): `servidor.py --carpeta "C:\ruta\a\la\carpeta"`.
 
 **En cada celular:**
-- **Android con el APK:** abre la app → **Planilla → Conexión con el computador**, pega el link y toca *Conectar*.
+- **Android con el APK:** abre la app → **Ajustes y conexión**, pega el link y toca *Conectar*.
 - **Cualquier celular (Android o iPhone) sin APK:** abre el link en Chrome o Safari. La primera vez ngrok muestra un aviso: toca *Visit Site*. Luego agrégala a la pantalla de inicio (Chrome: menú ⋮ → *Instalar aplicación*; Safari: Compartir → *Agregar a inicio*).
-- **Administrador:** **Planilla → Administrador**, escribe el PIN y toca *Entrar*. Para cambiar el PIN: `servidor.py --pin 1234`. Para cambiar el código de acceso: `servidor.py --codigo NUEVO` (los celulares tendrán que ingresar el nuevo).
+- **Administrador:** en la pantalla del chofer toca **Ajustes y conexión → Administrador**, escribe el PIN y toca *Entrar*. Para cambiar el PIN: `servidor.py --pin 1234`. Para cambiar el código de acceso: `servidor.py --codigo NUEVO` (los celulares tendrán que ingresar el nuevo).
 
 **Bueno saber:**
 - **El computador debe estar encendido** con el programa abierto para recibir datos. Si está apagado o un celular no tiene señal, los registros quedan guardados en el celular y se envían solos cuando se puede. Arriba se ve el estado: *"PC · planilla al día"* o *"Sin PC · 3 por enviar"*.
@@ -54,8 +62,8 @@ El computador de la oficina o taller guarda la planilla `Bitacora_Flota.xlsx`. *
 
 | Hoja | Contenido |
 |---|---|
-| Flota | Ficha completa de cada camión: odómetro, horómetro, VIN, conductor, estado del aceite, fallas abiertas, última auditoría, vencimientos |
-| Auditorías | Una fila por auditoría y una columna por cada punto del checklist |
+| Flota | Un camión por fila: N°, patente, modelo, odómetro, próxima mantención, km que faltan, si necesita deshielo, última auditoría y su responsable; luego la ficha completa |
+| Auditorías | Fecha, N°, patente, vehículo, odómetro, próxima mantención, km que faltan, responsable, necesita deshielo y fecha en que se hizo |
 | Preventivas | Servicio, repuestos, próximo km/fecha, costo |
 | Correctivas | Sistema, causa, repuestos, horas, taller, costo, fecha de cierre |
 | Fallas | Sistema, severidad, camión detenido, estado, fecha de cierre |
@@ -66,7 +74,7 @@ El computador de la oficina o taller guarda la planilla `Bitacora_Flota.xlsx`. *
 ## App Android (APK)
 
 1. Copia `Bitacora-Flota.apk` al celular y ábrelo. Android pedirá permitir *instalar apps de origen desconocido* para el administrador de archivos o el navegador: acéptalo.
-2. Abre **Bitácora Flota**, ve a **Planilla → Conexión con el computador**, pega el link que muestra la ventana del computador y toca *Conectar*.
+2. Abre **Bitácora Flota**, toca **Ajustes y conexión**, pega el link que muestra la ventana del computador y toca *Conectar*.
 3. La app funciona sin señal: los registros quedan en el celular y se envían solos cuando vuelve la conexión.
 
 Para volver a generar el APK (Linux o macOS, con Java 17+, Python 3 y npm): `android/construir-apk.sh`. Guarda el archivo `android/firma-bitacora.p12`: para instalar una versión nueva encima de la anterior, sin perder datos, el APK tiene que firmarse con la misma llave.

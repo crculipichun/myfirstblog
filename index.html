@@ -243,6 +243,14 @@ dl.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
   background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: 10px; font-weight: 600; font-size: 15px;
   max-width: calc(100% - 32px); box-shadow: 0 6px 20px rgba(0,0,0,.25);
 }
+.simple .nav { display: none; }
+.simple main { padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px)); }
+.simple .toast { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+.field input.big { min-height: 56px; font-size: 20px; font-family: var(--f-mono); }
+.field input.big#ch-resp { font-family: var(--f-body); font-size: 18px; }
+.sino { min-height: 60px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); font: 700 22px/1 var(--f-display); letter-spacing: .04em; cursor: pointer; }
+.sino[aria-pressed="true"][data-sino="si"] { background: var(--info); border-color: var(--info); color: #fff; }
+.sino[aria-pressed="true"][data-sino="no"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .sheetlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .sheetlist li { display: flex; gap: 10px; align-items: center; font-size: 15px; }
 .sheetlist .xl { font: 700 11px/1 var(--f-mono); padding: 5px 6px; border-radius: 4px; background: var(--ok-bg); color: var(--ok); }
@@ -290,7 +298,7 @@ const TIPOS = {
   aceite:     { label: "Cambio de aceite", code: "ACE", estado: "Cerrado" },
   odometro:   { label: "Lectura de odómetro", code: "ODO", estado: "Cerrado" }
 };
-const TIPOS_CAMION = ["Tracto camión", "Camión rígido", "Camión tolva", "Camión aljibe", "Camión pluma", "Furgón", "Semirremolque / rampla", "Otro"];
+const TIPOS_CAMION = ["Camioneta frigorífica", "Camión frigorífico", "Tracto camión", "Camión rígido", "Camión tolva", "Camión aljibe", "Camión pluma", "Furgón", "Semirremolque / rampla", "Otro"];
 const DOCS = [["vRevision", "Revisión técnica"], ["vPermiso", "Permiso de circulación"], ["vSoap", "SOAP"], ["vExtintor", "Extintor"]];
 const ESTADOS = ["Pendiente", "En proceso", "Cerrado"];
 const SISTEMAS = ["Motor", "Transmisión / Caja", "Embrague", "Frenos", "Suspensión", "Dirección", "Neumáticos", "Eléctrico", "Refrigeración", "Combustible", "Escape / DPF", "Hidráulico", "Carrocería / Cabina", "Quinta rueda / Acople", "Otro"];
@@ -298,35 +306,28 @@ const SEVERIDADES = ["Baja", "Media", "Alta", "Crítica"];
 const SERVICIOS = ["Servicio programado por km", "Servicio mayor", "Engrase general", "Revisión de frenos", "Alineación y balanceo", "Rotación / cambio de neumáticos", "Revisión sistema eléctrico", "Cambio de filtros", "Cambio refrigerante", "Revisión técnica (preparación)", "Otro"];
 const ACEITES = ["15W-40", "10W-40", "5W-30", "10W-30", "SAE 40", "80W-90 (diferencial)", "75W-90 (caja)"];
 const FILTROS = [["fAceite", "Filtro de aceite"], ["fAire", "Filtro de aire"], ["fComb", "Filtro de combustible"], ["fSep", "Separador de agua"]];
-const CHECKLIST = [
-  ["Frenos", [["frenoServicio", "Frenos de servicio / balatas"], ["frenoAire", "Sistema de aire (fugas, presión)"], ["frenoEstac", "Freno de estacionamiento"]]],
-  ["Neumáticos", [["neuPresion", "Presión de inflado"], ["neuBanda", "Desgaste de banda"], ["neuPernos", "Pernos y tuercas de rueda"]]],
-  ["Luces", [["luzFocos", "Focos altos y bajos"], ["luzInterm", "Intermitentes y balizas"], ["luzFreno", "Luces de freno y retroceso"]]],
-  ["Motor", [["motAceite", "Nivel de aceite"], ["motRefri", "Nivel de refrigerante"], ["motFugas", "Fugas visibles"], ["motCorreas", "Correas y mangueras"]]],
-  ["Cabina y seguridad", [["cabCinturon", "Cinturones de seguridad"], ["cabExtintor", "Extintor vigente"], ["cabKit", "Botiquín, triángulos y chaleco"], ["cabEspejos", "Espejos"], ["cabBocina", "Bocina y alarma de retroceso"], ["cabLimpia", "Limpiaparabrisas"]]],
-  ["Documentos", [["docRevision", "Revisión técnica al día"], ["docPermiso", "Permiso de circulación"], ["docSoap", "SOAP vigente"]]]
-];
-const CK_ITEMS = CHECKLIST.flatMap(([, items]) => items);
+// Aviso de mantención cuando faltan estos km o menos
+const AVISO_MANT_KM = 1000;
 
 // Flota de la empresa (N° 1 al 17 y 815). El programa del computador también la lee de aquí.
-const FLOTA_INICIAL = /*FLOTA_INICIAL*/[{"id":"cam-1","interno":"1","patente":"STFF54","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
-  {"id":"cam-2","interno":"2","patente":"STFG40","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
-  {"id":"cam-3","interno":"3","patente":"STFF52","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
-  {"id":"cam-4","interno":"4","patente":"SSYL78","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
-  {"id":"cam-5","interno":"5","patente":"SSYL59","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
-  {"id":"cam-6","interno":"6","patente":"VZTR73","marca":"Kia","modelo":"Frontier 2,5","anio":2026,"intervalo":10000},
-  {"id":"cam-7","interno":"7","patente":"STFF53","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
-  {"id":"cam-8","interno":"8","patente":"SSYL80","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
-  {"id":"cam-9","interno":"9","patente":"STFG52","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
-  {"id":"cam-10","interno":"10","patente":"STFG41","marca":"Mitsubishi","modelo":"Fuso 413","anio":2023,"intervalo":10000},
-  {"id":"cam-11","interno":"11","patente":"KWJV95","marca":"Kia","modelo":"Frontier 2,5","anio":2019,"intervalo":10000},
-  {"id":"cam-12","interno":"12","patente":"VYWC61","marca":"Kia","modelo":"Frontier 2,5","anio":2026,"intervalo":10000},
-  {"id":"cam-13","interno":"13","patente":"LRTF87","marca":"Kia","modelo":"Frontier 2,5","anio":2020,"intervalo":10000},
-  {"id":"cam-14","interno":"14","patente":"VRWD34","marca":"Kia","modelo":"Frontier 2,5","anio":2026,"intervalo":10000},
-  {"id":"cam-15","interno":"15","patente":"VRWD44","marca":"Kia","modelo":"Frontier 2,5","anio":2026,"intervalo":10000},
-  {"id":"cam-16","interno":"16","patente":"VRWD33","marca":"Kia","modelo":"Frontier 2,5","anio":2026,"intervalo":10000},
-  {"id":"cam-17","interno":"17","patente":"VZTR58","marca":"Hyundai","modelo":"Porter","anio":2026,"intervalo":10000},
-  {"id":"cam-815","interno":"815","patente":"RFBF71","marca":"Mitsubishi","modelo":"Fuso 815","anio":2021,"intervalo":10000}]/*FIN_FLOTA*/;
+const FLOTA_INICIAL = /*FLOTA_INICIAL*/[{"id":"cam-1","interno":"1","patente":"STFF54","marca":"Mitsubishi","modelo":"Fuso Canter 413","tipoCamion":"Camioneta frigorífica","anio":2023,"intervalo":10000},
+  {"id":"cam-2","interno":"2","patente":"STFG40","marca":"Mitsubishi","modelo":"Fuso Canter 413","tipoCamion":"Camioneta frigorífica","anio":2023,"intervalo":10000},
+  {"id":"cam-3","interno":"3","patente":"STFF52","marca":"Mitsubishi","modelo":"Fuso Canter 413","tipoCamion":"Camioneta frigorífica","anio":2023,"intervalo":10000},
+  {"id":"cam-4","interno":"4","patente":"SSYL78","marca":"Mitsubishi","modelo":"Fuso Canter 413","tipoCamion":"Camioneta frigorífica","anio":2023,"intervalo":10000},
+  {"id":"cam-5","interno":"5","patente":"SSYL59","marca":"Mitsubishi","modelo":"Fuso Canter 413","tipoCamion":"Camioneta frigorífica","anio":2023,"intervalo":10000},
+  {"id":"cam-6","interno":"6","patente":"VZTR73","marca":"Kia","modelo":"Frontier 2,5","tipoCamion":"Camioneta frigorífica","anio":2026,"intervalo":10000},
+  {"id":"cam-7","interno":"7","patente":"STFF53","marca":"Mitsubishi","modelo":"Fuso Canter 413","tipoCamion":"Camioneta frigorífica","anio":2023,"intervalo":10000},
+  {"id":"cam-8","interno":"8","patente":"SSYL80","marca":"Mitsubishi","modelo":"Fuso Canter 413","tipoCamion":"Camioneta frigorífica","anio":2023,"intervalo":10000},
+  {"id":"cam-9","interno":"9","patente":"STFG52","marca":"Mitsubishi","modelo":"Fuso Canter 413","tipoCamion":"Camioneta frigorífica","anio":2023,"intervalo":10000},
+  {"id":"cam-10","interno":"10","patente":"STFG41","marca":"Mitsubishi","modelo":"Fuso Canter 413","tipoCamion":"Camioneta frigorífica","anio":2023,"intervalo":10000},
+  {"id":"cam-11","interno":"11","patente":"KWJV95","marca":"Kia","modelo":"Frontier 2,5","tipoCamion":"Camioneta frigorífica","anio":2019,"intervalo":10000},
+  {"id":"cam-12","interno":"12","patente":"VYWC61","marca":"Kia","modelo":"Frontier 2,5","tipoCamion":"Camioneta frigorífica","anio":2026,"intervalo":10000},
+  {"id":"cam-13","interno":"13","patente":"LRTF87","marca":"Kia","modelo":"Frontier 2,5","tipoCamion":"Camioneta frigorífica","anio":2020,"intervalo":10000},
+  {"id":"cam-14","interno":"14","patente":"VRWD34","marca":"Kia","modelo":"Frontier 2,5","tipoCamion":"Camioneta frigorífica","anio":2026,"intervalo":10000},
+  {"id":"cam-15","interno":"15","patente":"VRWD44","marca":"Kia","modelo":"Frontier 2,5","tipoCamion":"Camioneta frigorífica","anio":2026,"intervalo":10000},
+  {"id":"cam-16","interno":"16","patente":"VRWD33","marca":"Kia","modelo":"Frontier 2,5","tipoCamion":"Camioneta frigorífica","anio":2026,"intervalo":10000},
+  {"id":"cam-17","interno":"17","patente":"VZTR58","marca":"Hyundai","modelo":"Porter","tipoCamion":"Camioneta frigorífica","anio":2026,"intervalo":10000},
+  {"id":"cam-815","interno":"815","patente":"RFBF71","marca":"Mitsubishi","modelo":"Fuso 815","tipoCamion":"Camioneta frigorífica","anio":2021,"intervalo":10000}]/*FIN_FLOTA*/;
 
 /* ---------- Utilidades ---------- */
 const $ = (s, el = document) => el.querySelector(s);
@@ -497,7 +498,7 @@ const Store = {
 /* ---------- Administrador: solo él agrega, edita y borra camiones ---------- */
 function soloAdmin() {
   if (UI.admin) return true;
-  toast("Solo el administrador puede agregar o modificar camiones. Ingresa el PIN en Planilla.");
+  toast("Solo el administrador puede hacer esto. Ingresa el PIN en Ajustes.");
   return false;
 }
 async function entrarAdmin(pin) {
@@ -513,9 +514,9 @@ async function entrarAdmin(pin) {
     else if (pin !== guardado) { toast("PIN incorrecto."); return; }
     sset("bf_admin_local", "1"); UI.admin = true;
   }
-  toast("Modo administrador activo"); render();
+  toast("Modo administrador activo"); go("inicio");
 }
-function salirAdmin() { sdel("bf_pin"); sdel("bf_admin_local"); UI.admin = false; toast("Saliste del modo administrador"); render(); }
+function salirAdmin() { sdel("bf_pin"); sdel("bf_admin_local"); UI.admin = false; toast("Saliste del modo administrador"); go("chofer"); }
 
 /* ---------- Datos de ejemplo ---------- */
 function ejemplo() {
@@ -525,7 +526,6 @@ function ejemplo() {
     { id: "ej-c2", patente: "LBHX27", interno: "15", tipoCamion: "Tracto camión", marca: "Mercedes-Benz", modelo: "Actros 2645", anio: 2021, color: "Rojo", km: 176200, horometro: 5480, intervalo: 15000, conductor: "M. Díaz", vRevision: d(-200), vPermiso: d(-160), vSoap: d(-160), vExtintor: d(-300), ejemplo: true },
     { id: "ej-c3", patente: "JWPD85", interno: "07", tipoCamion: "Camión tolva", marca: "Scania", modelo: "R450", anio: 2018, km: 402900, horometro: 14310, intervalo: 12000, conductor: "J. Araya", faena: "Minera, turno B", vRevision: d(5), vPermiso: d(-160), vSoap: d(-160), vExtintor: d(-90), ejemplo: true }
   ];
-  const ck = Object.fromEntries(CK_ITEMS.map(([k]) => [k, "OK"]));
   const r = [
     { id: "ej-r1", tipo: "aceite", camionId: "ej-c1", fecha: d(40), km: 271200, responsable: "J. Muñoz", estado: "Cerrado", tipoAceite: "15W-40", litros: 38, fAceite: true, fAire: false, fComb: true, fSep: true, proximoKm: 286200, costo: 245000, descripcion: "Cambio según pauta." },
     { id: "ej-r2", tipo: "aceite", camionId: "ej-c2", fecha: d(12), km: 172000, responsable: "J. Muñoz", estado: "Cerrado", tipoAceite: "10W-40", litros: 36, fAceite: true, fAire: true, fComb: true, fSep: false, proximoKm: 187000, costo: 268000, descripcion: "" },
@@ -533,8 +533,8 @@ function ejemplo() {
     { id: "ej-r4", tipo: "falla", camionId: "ej-c3", fecha: d(2), km: 402850, responsable: "P. Rojas (conductor)", estado: "Pendiente", sistema: "Frenos", severidad: "Alta", detenido: true, descripcion: "Fuga de aire en válvula relé eje trasero. Presión baja al detenerse." },
     { id: "ej-r5", tipo: "correctiva", camionId: "ej-c1", fecha: d(6), km: 283900, responsable: "L. Soto", estado: "En proceso", sistema: "Eléctrico", causa: "Alternador con carga baja", repuestos: "Regulador de voltaje", horas: 3, taller: "Interno", costo: 95000, descripcion: "Se reemplaza regulador, pendiente prueba en ruta." },
     { id: "ej-r6", tipo: "preventiva", camionId: "ej-c2", fecha: d(12), km: 172000, responsable: "J. Muñoz", estado: "Cerrado", servicio: "Servicio programado por km", repuestos: "Filtros, engrase", proximoKm: 187000, proximaFecha: "", costo: 120000, descripcion: "Servicio 172.000 km." },
-    { id: "ej-r7", tipo: "auditoria", camionId: "ej-c2", fecha: d(3), km: 176100, responsable: "C. Pérez (supervisor)", estado: "Cerrado", checklist: { ...ck, neuBanda: "Obs", cabExtintor: "Obs" }, descripcion: "Neumático eje 3 lado izquierdo cerca del límite. Extintor vence el próximo mes." },
-    { id: "ej-r8", tipo: "auditoria", camionId: "ej-c3", fecha: d(2), km: 402850, responsable: "C. Pérez (supervisor)", estado: "Cerrado", checklist: { ...ck, frenoAire: "Falla", luzFreno: "Obs" }, descripcion: "Fuga de aire detectada, camión queda detenido." }
+    { id: "ej-r7", tipo: "auditoria", camionId: "ej-c2", fecha: d(3), km: 176100, responsable: "C. Pérez (supervisor)", estado: "Cerrado", proximaMant: 186000, deshielo: false, descripcion: "Neumático eje 3 lado izquierdo cerca del límite. Extintor vence el próximo mes." },
+    { id: "ej-r8", tipo: "auditoria", camionId: "ej-c3", fecha: d(2), km: 402850, responsable: "C. Pérez (supervisor)", estado: "Cerrado", proximaMant: 403500, deshielo: true, descripcion: "Fuga de aire detectada, camión queda detenido." }
   ];
   r.forEach(x => { x.ejemplo = true; x.creado = Date.now(); });
   return { camiones: c, registros: r };
@@ -571,17 +571,22 @@ function estadoCamion(c) {
   const f = abiertas(c.id);
   if (f.some(x => x.detenido)) return { nivel: "bad", texto: "Detenido" };
   const a = estadoAceite(c);
-  if (f.length || a.nivel === "bad" || a.nivel === "warn" || DOCS.some(([k]) => estadoDoc(c[k])?.nivel === "bad")) return { nivel: "warn", texto: "Revisar" };
+  if (f.length || a.nivel === "bad" || a.nivel === "warn" || deshieloPendiente(c) || estadoMant(c).nivel === "bad" || DOCS.some(([k]) => estadoDoc(c[k])?.nivel === "bad")) return { nivel: "warn", texto: "Revisar" };
   return { nivel: "ok", texto: "Operativo" };
 }
-function puntaje(ck) {
-  const vals = CK_ITEMS.map(([k]) => ck && ck[k]).filter(Boolean);
-  const ok = vals.filter(v => v === "OK").length, obs = vals.filter(v => v === "Obs").length, falla = vals.filter(v => v === "Falla").length;
-  return { ok, obs, falla, total: vals.length, pct: vals.length ? Math.round(ok / vals.length * 100) : 0 };
+// Próxima mantención: la que informó la última auditoría que la trae
+function estadoMant(c) {
+  const u = registrosDe(c.id).find(r => r.tipo === "auditoria" && num(r.proximaMant) != null);
+  if (!u) return { nivel: "info", texto: "Sin dato", restante: null, km: null };
+  const restante = num(u.proximaMant) - (kmDe(c) ?? 0);
+  if (restante <= 0) return { nivel: "bad", texto: `Atrasada ${fmtKm(-restante)}`, restante, km: num(u.proximaMant) };
+  return { nivel: restante <= AVISO_MANT_KM ? "warn" : "ok", texto: `Faltan ${fmtKm(restante)}`, restante, km: num(u.proximaMant) };
 }
+// La última auditoría pidió deshielo y todavía nadie lo marcó como hecho
+function deshieloPendiente(c) { const a = ultimo(c.id, "auditoria"); return a && a.deshielo === true && !a.deshieloHecho ? a : null; }
 function tituloRegistro(r) {
   switch (r.tipo) {
-    case "auditoria": { const p = puntaje(r.checklist); return `Auditoría · ${p.pct}% OK` + (p.falla ? ` · ${p.falla} falla${p.falla > 1 ? "s" : ""}` : "") + (p.obs ? ` · ${p.obs} obs.` : ""); }
+    case "auditoria": return `Auditoría · ${r.deshielo ? (r.deshieloHecho ? "deshielo hecho" : "necesita deshielo") : "sin deshielo"}${num(r.proximaMant) != null ? " · mant. " + fmtKm(num(r.proximaMant)) : ""}`;
     case "preventiva": return r.servicio || "Mantención preventiva";
     case "correctiva": return `${r.sistema || "Correctiva"}${r.causa ? ": " + r.causa : ""}`;
     case "falla": return `Falla ${r.severidad ? r.severidad.toLowerCase() : ""} · ${r.sistema || ""}`;
@@ -596,6 +601,10 @@ function alertas() {
     const a = estadoAceite(c);
     if (a.nivel === "bad" || a.nivel === "warn") out.push({ nivel: a.nivel, camion: c, texto: "Cambio de aceite: " + a.texto.toLowerCase(), accion: { tipo: "aceite", camionId: c.id } });
     if (a.nivel === "info") out.push({ nivel: "info", camion: c, texto: "Sin cambio de aceite registrado", accion: { tipo: "aceite", camionId: c.id } });
+    const dh = deshieloPendiente(c);
+    if (dh) out.push({ nivel: "bad", camion: c, texto: `Necesita deshielo (auditoría del ${fmtFecha(dh.fecha)})`, deshielo: dh.id });
+    const mt = estadoMant(c);
+    if (mt.nivel === "bad" || mt.nivel === "warn") out.push({ nivel: mt.nivel, camion: c, texto: `Mantención a los ${fmtKm(mt.km)}: ${mt.texto.toLowerCase()}`, accion: { tipo: "preventiva", camionId: c.id } });
     const au = ultimo(c.id, "auditoria"); const dd = au ? diasDesde(au.fecha) : null;
     if (!au || dd > 30) out.push({ nivel: "info", camion: c, texto: au ? `Última auditoría hace ${dd} días` : "Sin auditorías", accion: { tipo: "auditoria", camionId: c.id } });
     for (const [k, l] of DOCS) { const e = estadoDoc(c[k]); if (e && e.nivel !== "ok") out.push({ nivel: e.nivel, camion: c, texto: `${l}: ${e.texto.toLowerCase()}`, editar: c.id }); }
@@ -613,7 +622,7 @@ function alertas() {
 }
 
 /* ---------- Estado de la UI ---------- */
-const UI = { admin: false, view: "inicio", camionId: null, filtro: { tipo: "", camionId: "", estado: "", q: "" }, form: null, confirm: null, conectando: true };
+const UI = { admin: false, chofer: {}, view: "chofer", camionId: null, filtro: { tipo: "", camionId: "", estado: "", q: "" }, form: null, confirm: null, conectando: true };
 
 function go(view, extra = {}) {
   UI.view = view; Object.assign(UI, { camionId: null, confirm: null }, extra);
@@ -627,7 +636,11 @@ function render() {
   const app = $("#app");
   if (UI.view === "nuevo" && app.querySelector("#f-reg")) return; // no pisar un formulario en edición por cambios remotos
   if (UI.view === "camion-form" && app.querySelector("#f-cam")) return;
-  const v = { inicio: vInicio, flota: vFlota, camion: vCamion, "camion-form": vCamionForm, nuevo: vNuevo, historial: vHistorial, planilla: vPlanilla }[UI.view] || vInicio;
+  if (!UI.admin && !["chofer", "ajustes"].includes(UI.view)) UI.view = "chofer";
+  document.body.classList.toggle("simple", !UI.admin);
+  if (UI.view === "chofer" && app.querySelector("#f-chofer")) return;
+  if (UI.view === "ajustes" && app.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;
+  const v = { chofer: vChofer, ajustes: vAjustes, inicio: vInicio, flota: vFlota, camion: vCamion, "camion-form": vCamionForm, nuevo: vNuevo, historial: vHistorial, planilla: vPlanilla }[UI.view] || vInicio;
   app.innerHTML = v();
   if (UI.view === "nuevo") wireRegistroForm();
   if (UI.view === "camion-form") wireCamionForm();
@@ -664,24 +677,24 @@ function emptyFlota() {
 function vInicio() {
   if (!Store.camiones.length) return `${apkBanner()}<section><span class="eyebrow">${fmtFecha(hoy())}</span><h1>Control de flota</h1></section>${emptyFlota()}`;
   const al = alertas();
-  const fa = abiertas().length;
-  const ac = Store.camiones.filter(c => ["bad", "warn"].includes(estadoAceite(c).nivel)).length;
   const mes = hoy().slice(0, 7);
   const aud = Store.registros.filter(r => r.tipo === "auditoria" && (r.fecha || "").startsWith(mes)).length;
   const det = Store.camiones.filter(c => estadoCamion(c).nivel === "bad").length;
+  const dsh = Store.camiones.filter(c => deshieloPendiente(c)).length;
+  const mtn = Store.camiones.filter(c => ["bad", "warn"].includes(estadoMant(c).nivel)).length;
   const recientes = [...Store.registros].sort(porFecha).slice(0, 6);
   return `${apkBanner()}${ejemploBanner()}
   <section><span class="eyebrow">${fmtFecha(hoy())}</span><h1>Control de flota</h1></section>
   <div class="tiles">
     <div class="panel tile"><b class="num">${Store.camiones.length - det}/${Store.camiones.length}</b><span>Camiones operativos</span></div>
-    <div class="panel tile ${fa ? "bad" : ""}"><b class="num">${fa}</b><span>Fallas abiertas</span></div>
-    <div class="panel tile ${ac ? "warn" : ""}"><b class="num">${ac}</b><span>Aceite por vencer o vencido</span></div>
+    <div class="panel tile ${dsh ? "bad" : ""}"><b class="num">${dsh}</b><span>Necesitan deshielo</span></div>
+    <div class="panel tile ${mtn ? "warn" : ""}"><b class="num">${mtn}</b><span>Mantención próxima o atrasada</span></div>
     <div class="panel tile"><b class="num">${aud}</b><span>Auditorías este mes</span></div>
   </div>
   <section><div class="spread"><h2>Requiere atención</h2><span class="muted small">${al.length} pendiente${al.length === 1 ? "" : "s"}</span></div>
     ${al.length ? `<div class="panel list">${al.slice(0, 8).map(a => `<div class="alert"><span class="sev ${a.nivel}"></span>
       <div class="body" style="flex:1;min-width:0;display:grid;gap:6px"><div class="row">${plate(a.camion.patente)}<span class="small">${esc(a.camion.marca || "")} ${esc(a.camion.modelo || "")}</span></div><span>${esc(a.texto)}</span></div>
-      ${a.registro ? `<button class="btn sm" data-act="ver-reg" data-id="${esc(a.registro)}">Ver</button>` : a.editar ? (UI.admin ? `<button class="btn sm" data-act="editar-camion" data-id="${esc(a.editar)}">Actualizar</button>` : "") : `<button class="btn sm" data-act="registrar" data-tipo="${a.accion.tipo}" data-camion="${esc(a.accion.camionId)}">Registrar</button>`}</div>`).join("")}</div>
+      ${a.deshielo ? `<button class="btn sm" data-act="deshielo-hecho" data-id="${esc(a.deshielo)}">Hecho</button>` : a.registro ? `<button class="btn sm" data-act="ver-reg" data-id="${esc(a.registro)}">Ver</button>` : a.editar ? (UI.admin ? `<button class="btn sm" data-act="editar-camion" data-id="${esc(a.editar)}">Actualizar</button>` : "") : `<button class="btn sm" data-act="registrar" data-tipo="${a.accion.tipo}" data-camion="${esc(a.accion.camionId)}">Registrar</button>`}</div>`).join("")}</div>
       ${al.length > 8 ? `<span class="muted small">y ${al.length - 8} más en Flota.</span>` : ""}`
     : `<div class="panel alert"><span class="sev" style="background:var(--ok)"></span><span>Todo al día. No hay fallas abiertas ni cambios de aceite por vencer.</span></div>`}
   </section>
@@ -731,7 +744,9 @@ function vCamion() {
   <div class="panel" style="padding:14px"><dl class="kv">
     <dt>Aceite</dt><dd>${esc(a.texto)}${a.ultimo ? `<br><span class="muted small">Último: ${fmtFecha(a.ultimo.fecha)} a los ${fmtKm(a.ultimo.km)} · próximo ${fmtKm(a.ultimo.proximoKm)}</span>` : ""}</dd>
     <dt>Intervalo aceite</dt><dd class="num">${fmtKm(c.intervalo)}</dd>
-    <dt>Última auditoría</dt><dd>${au ? `${fmtFecha(au.fecha)} · ${puntaje(au.checklist).pct}% OK` : "—"}</dd>
+    <dt>Próxima mantención</dt><dd>${(m => m.km != null ? `${fmtKm(m.km)} <span class="pill ${m.nivel}">${esc(m.texto)}</span>` : "—")(estadoMant(c))}</dd>
+    <dt>Deshielo</dt><dd>${deshieloPendiente(c) ? `<span class="pill bad">Necesita deshielo</span>` : "Al día"}</dd>
+    <dt>Última auditoría</dt><dd>${au ? `${fmtFecha(au.fecha)}${au.responsable ? " · " + esc(au.responsable) : ""}` : "—"}</dd>
     <dt>Gasto registrado</dt><dd class="num">${fmtCLP(costo)}</dd>
   </dl></div>
   <section><h2>Vencimientos</h2><div class="panel list">${DOCS.map(([k, l]) => { const d = estadoDoc(c[k]);
@@ -816,14 +831,11 @@ function vNuevo() {
 
 function seccionTipo(tipo, v, c) {
   const sel = (id, name, opts, val, req) => `<select id="${id}" name="${name}" ${req ? "required" : ""}><option value="">Selecciona…</option>${opts.map(o => `<option ${o === val ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
-  if (tipo === "auditoria") {
-    const ck = v.checklist || {}; const p = puntaje(ck);
-    return `<div class="panel" style="padding:16px;display:grid;gap:8px">
-      <div class="spread"><h3>Checklist</h3><div class="score" id="score"><b class="num">${p.pct}%</b><span class="muted small">${p.total}/${CK_ITEMS.length} revisados</span></div></div>
-      <div class="row"><button type="button" class="btn sm" data-act="todo-ok">Marcar todo OK</button><span class="muted small">Luego cambia solo lo observado.</span></div>
-      ${CHECKLIST.map(([g, items]) => `<div class="ck-group"><h4>${esc(g)}</h4>${items.map(([k, l]) => `<div class="ck"><span>${esc(l)}</span><span class="seg" data-ck="${k}">${["OK", "Obs", "Falla"].map(x => `<button type="button" data-v="${x}" aria-pressed="${ck[k] === x}">${x}</button>`).join("")}</span></div>`).join("")}</div>`).join("")}
-    </div>`;
-  }
+  if (tipo === "auditoria") return `<div class="fieldset">
+    <label class="field"><span>Próxima mantención a los (km) *</span><input id="reg-proxmant" name="proximaMant" type="number" inputmode="numeric" min="0" value="${esc(v.proximaMant ?? (c ? estadoMant(c).km ?? "" : ""))}"></label>
+    <div class="field"><span>¿Necesita deshielo? *</span><div class="checks">
+      <label class="check"><input type="radio" name="deshielo" value="si" ${v.deshielo === true || v.deshielo === "si" ? "checked" : ""}> Sí</label>
+      <label class="check"><input type="radio" name="deshielo" value="no" ${v.deshielo === false || v.deshielo === "no" ? "checked" : ""}> No</label></div></div></div>`;
   if (tipo === "preventiva") return `<div class="fieldset">
     <label class="field"><span>Servicio *</span>${sel("reg-servicio", "servicio", SERVICIOS, v.servicio, true)}</label>
     <label class="field"><span>Repuestos / insumos</span><input id="reg-repuestos" name="repuestos" value="${esc(v.repuestos || "")}"></label>
@@ -867,9 +879,6 @@ function wireRegistroForm() {
   f.addEventListener("click", e => {
     const tb = e.target.closest(".typebtn");
     if (tb) { const v = leerFormRegistro(); v.tipo = tb.dataset.tipo; delete v.estado; if (v.proximoKm != null && tb.dataset.tipo === "aceite") delete v.proximoKm; UI.form = v; $("#app").innerHTML = vNuevo(); wireRegistroForm(); return; }
-    const sb = e.target.closest(".seg button");
-    if (sb) { const k = sb.parentElement.dataset.ck; UI.form = leerFormRegistro(); UI.form.checklist = { ...(UI.form.checklist || {}), [k]: sb.dataset.v }; sb.parentElement.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b === sb)); actualizarPuntaje(); return; }
-    if (e.target.closest("[data-act=todo-ok]")) { UI.form = leerFormRegistro(); UI.form.checklist = Object.fromEntries(CK_ITEMS.map(([k]) => [k, (UI.form.checklist || {})[k] && UI.form.checklist[k] !== "OK" ? UI.form.checklist[k] : "OK"])); f.querySelectorAll(".seg").forEach(s => s.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === UI.form.checklist[s.dataset.ck]))); actualizarPuntaje(); }
   });
   const selC = $("#reg-camion"), km = $("#reg-km");
   selC.addEventListener("change", () => { const c = camion(selC.value); if (c && (!km.value || km.dataset.auto !== "0")) { km.value = kmDe(c) ?? ""; km.dataset.auto = "1"; } autoProx(); });
@@ -878,7 +887,6 @@ function wireRegistroForm() {
   function autoProx() { const p = $("#reg-proxkm"); const c = camion(selC.value); if (p && p.dataset.auto === "1" && $("#reg-aceite") && c && km.value) p.value = Number(km.value) + (c.intervalo || 15000); }
   f.addEventListener("submit", guardarRegistro);
 }
-function actualizarPuntaje() { const p = puntaje(UI.form.checklist); const s = $("#score"); if (s) s.innerHTML = `<b class="num">${p.pct}%</b><span class="muted small">${p.total}/${CK_ITEMS.length} revisados</span>`; }
 
 async function guardarRegistro(e) {
   e.preventDefault();
@@ -889,14 +897,16 @@ async function guardarRegistro(e) {
   if ((v.tipo === "correctiva" || v.tipo === "falla") && !v.sistema) falta.push("sistema");
   if (v.tipo === "falla" && !v.severidad) falta.push("severidad");
   if (v.tipo === "aceite" && !v.tipoAceite) falta.push("tipo de aceite");
-  if (v.tipo === "auditoria" && puntaje(v.checklist).total === 0) falta.push("al menos un punto del checklist");
+  if (v.tipo === "auditoria" && num(v.proximaMant) == null) falta.push("próxima mantención");
+  if (v.tipo === "auditoria" && !["si", "no", true, false].includes(v.deshielo)) falta.push("si necesita deshielo");
   if (falta.length) { toast("Falta completar: " + falta.join(", ")); return; }
   if (v.tipo === "odometro" && !v.id && num(v.km) < (kmDe(c) ?? 0)) { toast(`La lectura es menor que el odómetro actual (${fmtKm(kmDe(c))}).`); return; }
-  const r = { ...v, id: v.id || uid(), creado: v.creado || Date.now(), km: num(v.km), costo: num(v.costo), litros: num(v.litros), horas: num(v.horas), horometro: num(v.horometro), proximoKm: num(v.proximoKm), patente: normPatente(c.patente) };
+  const r = { ...v, id: v.id || uid(), creado: v.creado || Date.now(), km: num(v.km), costo: num(v.costo), litros: num(v.litros), horas: num(v.horas), horometro: num(v.horometro), proximoKm: num(v.proximoKm), proximaMant: num(v.proximaMant), patente: normPatente(c.patente) };
+  if (r.tipo === "auditoria") r.deshielo = r.deshielo === "si" || r.deshielo === true; else { delete r.deshielo; delete r.proximaMant; }
   if (r.estado === "Cerrado" && !r.cerrado) r.cerrado = hoy();
   if (r.estado !== "Cerrado") delete r.cerrado;
   delete r.ejemplo;
-  if (r.tipo !== "auditoria") delete r.checklist;
+  delete r.checklist;
   if (r.responsable) sset("bf_resp", r.responsable);
   try { await Store.save("registros", r); } catch { return; }
   UI.form = null; toast(v.id ? "Registro actualizado" : "Registro guardado");
@@ -938,8 +948,7 @@ function vHistorial() {
     ${regs.length ? `<div class="panel list">${regs.map(r => itemRegistro(r)).join("")}</div>` : `<p class="muted">No hay registros con estos filtros.</p>`}`;
 }
 
-function vPlanilla() {
-  const n = t => Store.registros.filter(r => r.tipo === t).length;
+function tarjetasConexion() {
   const P = Store.pc;
   const pcPanel = Store.mode !== "pc" ? "" : `<div class="panel" style="padding:16px;display:grid;gap:10px">
     <div class="spread"><h3>Planilla en el computador</h3><span class="pill ${!P.conectado ? "warn" : P.pendiente ? "warn" : "ok"}">${!P.conectado ? "Sin conexión" : P.pendiente ? "Excel abierto" : "Al día"}</span></div>
@@ -964,12 +973,85 @@ function vPlanilla() {
           : sget("bf_pin_local") ? "Solo el administrador agrega, edita o borra camiones en este teléfono." : "Crea un PIN de administrador para este teléfono (mínimo 4 números)."}</span>
         <label class="field"><span>PIN</span><input id="admin-pin" type="password" inputmode="numeric" autocomplete="off"></label>
         <button class="btn primary" data-act="admin-entrar">${Store.mode !== "pc" && !sget("bf_pin_local") ? "Crear PIN" : "Entrar"}</button>`}</div>`;
+  return { srvCard, pcPanel, adminCard };
+}
+
+/* ---------- Modo chofer: elegir camión y enviar la auditoría en 4 datos ---------- */
+function vChofer() {
+  const ch = UI.chofer;
+  if (ch.enviado) {
+    const c = camion(ch.enviado.camionId) || {};
+    return `<div class="panel empty" style="gap:14px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M7 12.5l3.2 3.2L17 9"/></svg>
+      <h2>Auditoría enviada</h2>
+      <div class="row" style="justify-content:center">${plate(c.patente, true)}</div>
+      <p class="muted" style="margin:0;max-width:34ch">${Store.mode === "pc" ? "Se agrega a la planilla del computador. Si no hay señal, queda guardada en el teléfono y se envía sola." : Store.mode === "shared" ? "Quedó guardada en la planilla." : "Quedó guardada en este teléfono."}</p>
+      <button class="btn primary block" data-act="chofer-otra" style="min-height:52px">Auditar otro camión</button>
+    </div>`;
+  }
+  if (ch.camionId) {
+    const c = camion(ch.camionId); if (!c) { ch.camionId = null; return vChofer(); }
+    const mt = estadoMant(c);
+    return `<div><button class="linkbtn" data-act="chofer-volver">‹ Cambiar camión</button></div>
+    <div class="panel" style="padding:16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <b style="font:700 34px/1 var(--f-display)">N° ${esc(c.interno || "—")}</b>${plate(c.patente, true)}
+      <div style="flex:1;min-width:0"><div style="font-weight:600">${esc(c.marca || "")} ${esc(c.modelo || "")}</div><div class="small muted">${kmDe(c) != null ? `Último odómetro: <span class="num">${fmtKm(kmDe(c))}</span>` : "Sin odómetro registrado"}</div></div>
+    </div>
+    <form id="f-chofer" class="panel" style="padding:16px;gap:20px" novalidate>
+      <label class="field"><span>Odómetro (km)</span><input id="ch-km" class="big" type="number" inputmode="numeric" min="0" required placeholder="${esc(kmDe(c) ?? "Ej. 45210")}"></label>
+      <label class="field"><span>Próxima mantención (km)</span><input id="ch-mant" class="big" type="number" inputmode="numeric" min="0" required value="${esc(mt.km ?? "")}" placeholder="Ej. 50000"></label>
+      <label class="field"><span>Responsable de la auditoría</span><input id="ch-resp" class="big" autocomplete="name" required value="${esc(sget("bf_resp") || "")}" placeholder="Nombre y apellido"></label>
+      <div class="field"><span>¿Necesita deshielo?</span>
+        <div class="grid2"><button type="button" class="sino" data-sino="si" aria-pressed="${ch.deshielo === true}">Sí</button><button type="button" class="sino" data-sino="no" aria-pressed="${ch.deshielo === false}">No</button></div></div>
+      <button class="btn primary block" type="submit" style="min-height:56px;font-size:18px">Enviar auditoría</button>
+    </form>`;
+  }
+  const q = (ch.q || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  // Solo números: busca por N° de camión (el N° exacto primero). Con letras: busca por patente.
+  const soloNum = /^\d+$/.test(q);
+  const cams = [...Store.camiones].sort(ordenInterno)
+    .filter(c => !q || (soloNum ? String(c.interno || "").startsWith(q) : normPatente(c.patente).includes(q)))
+    .sort((a, b) => soloNum ? (String(b.interno) === q) - (String(a.interno) === q) : 0);
+  return `${apkBanner()}<section><h1>¿Qué camión vas a auditar?</h1>
+    <label class="field"><span>Buscar por N° o patente</span><input id="ch-q" type="search" inputmode="search" autocomplete="off" value="${esc(ch.q || "")}" placeholder="Ej. 7 o STFF53"></label></section>
+    ${cams.length ? `<div class="panel list">${cams.map(c => { const au = ultimo(c.id, "auditoria"); const dd = au ? diasDesde(au.fecha) : null;
+      return `<button class="item" data-act="chofer-camion" data-id="${esc(c.id)}" style="padding:14px">
+        <b style="font:700 26px/1 var(--f-display);min-width:52px">${esc(c.interno || "—")}</b>${plate(c.patente)}
+        <span class="body"><span class="title">${esc(c.modelo || c.marca || "")}</span><span class="meta">${au ? (dd === 0 ? "Auditado hoy" : `Última auditoría hace ${dd} día${dd === 1 ? "" : "s"}`) : "Sin auditorías"}</span></span></button>`; }).join("")}</div>`
+      : Store.camiones.length ? `<p class="muted">No hay camiones con "${esc(ch.q)}".</p>` : emptyFlota()}
+    <button class="linkbtn" data-nav-link="ajustes" style="justify-self:center;padding:8px">Ajustes y conexión</button>`;
+}
+
+async function enviarChofer(e) {
+  e.preventDefault();
+  const c = camion(UI.chofer.camionId); if (!c) return;
+  const km = num($("#ch-km").value), mant = num($("#ch-mant").value), resp = $("#ch-resp").value.trim(), dh = UI.chofer.deshielo;
+  const falta = [];
+  if (km == null) falta.push("odómetro"); if (mant == null) falta.push("próxima mantención"); if (!resp) falta.push("responsable"); if (dh !== true && dh !== false) falta.push("si necesita deshielo");
+  if (falta.length) { toast("Falta completar: " + falta.join(", ")); return; }
+  if (km < (kmDe(c) ?? 0)) { toast(`El odómetro no puede ser menor que el último registrado (${fmtKm(kmDe(c))}). Revisa el número.`); return; }
+  sset("bf_resp", resp);
+  const r = { id: uid(), creado: Date.now(), tipo: "auditoria", camionId: c.id, patente: normPatente(c.patente), fecha: hoy(), km, proximaMant: mant, responsable: resp, deshielo: dh, estado: "Cerrado", cerrado: hoy(), descripcion: "" };
+  try { await Store.save("registros", r); } catch { return; }
+  UI.chofer = { enviado: { camionId: c.id } }; $("#app").innerHTML = ""; render(); window.scrollTo(0, 0);
+}
+
+function vAjustes() {
+  const { srvCard, pcPanel, adminCard } = tarjetasConexion();
+  return `<div><button class="linkbtn" data-act="chofer-inicio">‹ Volver</button></div><h1>Ajustes</h1>
+    ${EN_APK || Store.mode === "pc" ? "" : `<p class="muted" style="margin:0">${Store.mode === "shared" ? "Las auditorías se guardan en la planilla compartida." : "Las auditorías se guardan en este teléfono."}</p>`}
+    ${srvCard}${pcPanel}${adminCard}`;
+}
+
+function vPlanilla() {
+  const n = t => Store.registros.filter(r => r.tipo === t).length;
+  const { srvCard, pcPanel, adminCard } = tarjetasConexion();
   return `${srvCard}${pcPanel}${adminCard}<section><h1>Planilla Excel</h1>
     <p class="muted" style="margin:0">${Store.mode === "pc" ? "También puedes descargar una copia en este teléfono:" : "Descarga toda la información en"} un archivo .xlsx con una hoja por tipo de registro. Cada hoja trae filtros listos para ordenar por patente, fecha o estado.</p></section>
   <div class="panel" style="padding:16px;display:grid;gap:14px">
     <ul class="sheetlist">
       <li><span class="xl">XLS</span>Flota <span class="muted small">· ${Store.camiones.length} camiones, estado de aceite y fallas</span></li>
-      <li><span class="xl">XLS</span>Auditorías <span class="muted small">· ${n("auditoria")} · checklist punto por punto</span></li>
+      <li><span class="xl">XLS</span>Auditorías <span class="muted small">· ${n("auditoria")} · odómetro, próxima mantención y deshielo</span></li>
       <li><span class="xl">XLS</span>Preventivas <span class="muted small">· ${n("preventiva")}</span></li>
       <li><span class="xl">XLS</span>Correctivas <span class="muted small">· ${n("correctiva")}</span></li>
       <li><span class="xl">XLS</span>Fallas <span class="muted small">· ${n("falla")}</span></li>
@@ -1000,10 +1082,8 @@ function verRegistro(id) {
   const kv = (k, v) => v == null || v === "" ? "" : `<dt>${k}</dt><dd>${v}</dd>`;
   let extra = "";
   if (r.tipo === "auditoria") {
-    const p = puntaje(r.checklist);
-    const malos = CK_ITEMS.filter(([k]) => r.checklist?.[k] && r.checklist[k] !== "OK");
-    extra = kv("Resultado", `<b class="num">${p.pct}% OK</b> · ${p.ok} OK, ${p.obs} obs., ${p.falla} fallas`) +
-      kv("Observados", malos.length ? malos.map(([k, l]) => `<span class="pill ${r.checklist[k] === "Falla" ? "bad" : "warn"}">${r.checklist[k]}</span> ${esc(l)}`).join("<br>") : "Ninguno");
+    extra = kv("Próxima mantención", num(r.proximaMant) != null ? `<span class="num">${fmtKm(num(r.proximaMant))}</span>` : "") +
+      kv("Necesita deshielo", r.deshielo ? (r.deshieloHecho ? `Sí · realizado el ${fmtFecha(r.deshieloHecho)}` : `<span class="pill bad">Sí, pendiente</span>${UI.admin ? ` <button class="btn sm" data-act="deshielo-hecho" data-id="${esc(r.id)}">Marcar hecho</button>` : ""}`) : "No");
   }
   if (r.tipo === "preventiva") extra = kv("Servicio", esc(r.servicio)) + kv("Repuestos", esc(r.repuestos)) + kv("Próximo", r.proximoKm ? fmtKm(r.proximoKm) : "") + kv("Próxima fecha", r.proximaFecha ? fmtFecha(r.proximaFecha) : "");
   if (r.tipo === "correctiva") extra = kv("Sistema", esc(r.sistema)) + kv("Causa", esc(r.causa)) + kv("Repuestos", esc(r.repuestos)) + kv("Horas taller", r.horas ?? "") + kv("Taller", esc(r.taller));
@@ -1058,21 +1138,26 @@ async function exportarExcel() {
   const sn = b => b ? "Sí" : "No";
   const wb = XLSX.utils.book_new();
 
-  const flotaH = ["Patente", "N° interno", "Tipo", "Marca", "Modelo", "Año", "Color", "VIN / N° chasis", "N° motor", "Odómetro (km)", "Horómetro (h)", "Conductor", "Faena / centro de costo", "Intervalo aceite (km)", "Último cambio aceite", "Km último cambio", "Próximo cambio (km)", "Km restantes", "Estado aceite", "Fallas abiertas", "Última auditoría", "% OK última auditoría", ...DOCS.map(([, l]) => "Vence " + l), "Estanque (L)", "Neumáticos", "Estado", "Notas"];
-  XLSX.utils.book_append_sheet(wb, hoja(Store.camiones.map(c => {
-    const a = estadoAceite(c), au = ultimo(c.id, "auditoria");
-    return { "Patente": fmtPatente(c.patente), "N° interno": c.interno || "", "Tipo": c.tipoCamion || "", "Marca": c.marca, "Modelo": c.modelo, "Año": c.anio, "Color": c.color || "", "VIN / N° chasis": c.vin || "", "N° motor": c.motor || "",
+  const flotaH = ["N° interno", "Patente", "Tipo", "Marca", "Modelo", "Año", "Odómetro (km)", "Próxima mantención (km)", "Km para mantención", "Necesita deshielo", "Última auditoría", "Responsable última auditoría", "Estado",
+    "Horómetro (h)", "Conductor", "Faena / centro de costo", "Intervalo aceite (km)", "Último cambio aceite", "Km último cambio", "Próximo cambio (km)", "Km restantes", "Estado aceite", "Fallas abiertas",
+    ...DOCS.map(([, l]) => "Vence " + l), "Color", "VIN / N° chasis", "N° motor", "Estanque (L)", "Neumáticos", "Notas"];
+  XLSX.utils.book_append_sheet(wb, hoja([...Store.camiones].sort(ordenInterno).map(c => {
+    const a = estadoAceite(c), au = ultimo(c.id, "auditoria"), mt = estadoMant(c);
+    return { "Próxima mantención (km)": mt.km ?? "", "Km para mantención": mt.restante ?? "", "Necesita deshielo": au ? (deshieloPendiente(c) ? "Sí" : "No") : "", "Responsable última auditoría": au?.responsable || "",
+      "Patente": fmtPatente(c.patente), "N° interno": c.interno || "", "Tipo": c.tipoCamion || "", "Marca": c.marca, "Modelo": c.modelo, "Año": c.anio, "Color": c.color || "", "VIN / N° chasis": c.vin || "", "N° motor": c.motor || "",
       "Odómetro (km)": kmDe(c), "Horómetro (h)": horoDe(c) ?? "", "Conductor": c.conductor || "", "Faena / centro de costo": c.faena || "", "Intervalo aceite (km)": c.intervalo,
       ...Object.fromEntries(DOCS.map(([k, l]) => ["Vence " + l, c[k] || ""])), "Estanque (L)": c.estanque ?? "", "Neumáticos": c.neumaticos || "",
       "Último cambio aceite": a.ultimo?.fecha || "", "Km último cambio": a.ultimo?.km ?? "", "Próximo cambio (km)": a.ultimo?.proximoKm ?? "", "Km restantes": a.restante ?? "",
       "Estado aceite": a.nivel === "bad" ? "Vencido" : a.nivel === "warn" ? "Por vencer" : a.nivel === "ok" ? "Al día" : "Sin registro",
-      "Fallas abiertas": abiertas(c.id).length, "Última auditoría": au?.fecha || "", "% OK última auditoría": au ? puntaje(au.checklist).pct : "", "Estado": estadoCamion(c).texto, "Notas": c.notas || "" };
+      "Fallas abiertas": abiertas(c.id).length, "Última auditoría": au?.fecha || "", "Estado": estadoCamion(c).texto, "Notas": c.notas || "" };
   }), flotaH), "Flota");
 
-  const audH = ["Fecha", "Patente", "Km", "Auditor", "% OK", "OK", "Obs", "Fallas", ...CK_ITEMS.map(([, l]) => l), "Observaciones", "Estado"];
+  const audH = ["Fecha", "N° interno", "Patente", "Vehículo", "Odómetro (km)", "Próxima mantención (km)", "Km para mantención", "Responsable", "Necesita deshielo", "Deshielo realizado"];
   XLSX.utils.book_append_sheet(wb, hoja(regs.filter(r => r.tipo === "auditoria").map(r => {
-    const p = puntaje(r.checklist);
-    return { ...base(r), "Auditor": r.responsable, "% OK": p.pct, "OK": p.ok, "Obs": p.obs, "Fallas": p.falla, ...Object.fromEntries(CK_ITEMS.map(([k, l]) => [l, r.checklist?.[k] || ""])), "Observaciones": r.descripcion, "Estado": r.estado };
+    const c = camion(r.camionId) || {};
+    return { "Fecha": r.fecha, "N° interno": c.interno || "", "Patente": pat(r), "Vehículo": [c.marca, c.modelo].filter(Boolean).join(" "), "Odómetro (km)": r.km,
+      "Próxima mantención (km)": num(r.proximaMant) ?? "", "Km para mantención": num(r.proximaMant) != null && r.km != null ? num(r.proximaMant) - r.km : "",
+      "Responsable": r.responsable, "Necesita deshielo": r.deshielo ? "Sí" : "No", "Deshielo realizado": r.deshieloHecho || "" };
   }), audH), "Auditorías");
 
   const preH = ["Fecha", "Patente", "Km", "Responsable", "Servicio", "Repuestos", "Próximo (km)", "Próxima fecha", "Costo CLP", "Estado", "Observaciones"];
@@ -1110,13 +1195,23 @@ async function importarJSON(file) {
 /* ---------- Eventos ---------- */
 document.addEventListener("click", async e => {
   const nav = e.target.closest("[data-nav]"); if (nav) { go(nav.dataset.nav); return; }
-  const nl = e.target.closest("[data-nav-link]"); if (nl) { go(nl.dataset.navLink); return; }
+  const nl = e.target.closest("[data-nav-link]"); if (nl) { go(!UI.admin && nl.dataset.navLink === "planilla" ? "ajustes" : nl.dataset.navLink); return; }
+  const sino = e.target.closest("[data-sino]"); if (sino) { UI.chofer.deshielo = sino.dataset.sino === "si"; document.querySelectorAll("[data-sino]").forEach(b => b.setAttribute("aria-pressed", b === sino)); return; }
   const ft = e.target.closest("[data-filtro-tipo]"); if (ft) { UI.filtro.tipo = ft.dataset.filtroTipo; render(); return; }
   const el = e.target.closest("[data-act]"); if (!el) return;
   const id = el.dataset.id;
   switch (el.dataset.act) {
     case "cerrar": if (e.target === el || el.tagName === "BUTTON") closeSheet(); break;
     case "ver-reg": verRegistro(id); break;
+    case "chofer-camion": UI.chofer = { camionId: id }; $("#app").innerHTML = ""; render(); window.scrollTo(0, 0); break;
+    case "chofer-volver": UI.chofer = {}; $("#app").innerHTML = ""; render(); break;
+    case "chofer-otra": UI.chofer = {}; go("chofer"); break;
+    case "chofer-inicio": go(UI.admin ? "inicio" : "chofer"); break;
+    case "deshielo-hecho": {
+      if (!soloAdmin()) break;
+      const r = Store.registros.find(x => x.id === id); if (!r) break;
+      try { await Store.save("registros", { ...r, deshieloHecho: hoy() }); toast("Deshielo marcado como realizado"); closeSheet(); render(); } catch {} break;
+    }
     case "ver-camion": go("camion", { camionId: id }); break;
     case "nuevo-camion": if (!soloAdmin()) break; go("camion-form"); break;
     case "editar-camion": if (!soloAdmin()) break; go("camion-form", { camionId: id }); break;
@@ -1148,12 +1243,14 @@ document.addEventListener("click", async e => {
   }
 });
 document.addEventListener("input", e => {
+  if (e.target.id === "ch-q") { UI.chofer.q = e.target.value; clearTimeout(UI._q); UI._q = setTimeout(() => { $("#app").innerHTML = ""; render(); const q = $("#ch-q"); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 200); return; }
   const f = e.target.closest("[data-filtro]"); if (!f) return;
   UI.filtro[f.dataset.filtro] = f.value;
   if (f.dataset.filtro === "q") { clearTimeout(UI._q); UI._q = setTimeout(() => { render(); const q = $("#fil-q"); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 250); }
   else render();
 });
 document.addEventListener("change", e => { if (e.target.id === "imp-json" && e.target.files[0]) { importarJSON(e.target.files[0]); e.target.value = ""; } });
+document.addEventListener("submit", e => { if (e.target.id === "f-chofer") enviarChofer(e); });
 document.addEventListener("submit", async e => {
   if (e.target.id !== "f-odo") return;
   e.preventDefault();
@@ -1176,7 +1273,7 @@ window.appAtras = () => {
 
 /* ---------- Inicio ---------- */
 render();
-Store.init().then(() => { if (Store.mode === "local") UI.conectando = false; render(); });
+Store.init().then(() => { if (Store.mode === "local") UI.conectando = false; if (UI.admin && UI.view === "chofer") UI.view = "inicio"; render(); });
 if ("serviceWorker" in navigator && !window.claude && /^https?:$/.test(location.protocol)) {
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 }
