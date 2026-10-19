@@ -249,8 +249,9 @@ dl.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .field input.big { min-height: 56px; font-size: 20px; font-family: var(--f-mono); }
 .field input.big#ch-resp { font-family: var(--f-body); font-size: 18px; }
 .sino { min-height: 60px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); font: 700 22px/1 var(--f-display); letter-spacing: .04em; cursor: pointer; }
+.sino[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .sino[aria-pressed="true"][data-sino="si"] { background: var(--info); border-color: var(--info); color: #fff; }
-.sino[aria-pressed="true"][data-sino="no"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.sino[aria-pressed="true"][data-fallas="si"], .sino[aria-pressed="true"][data-opera="no"] { background: var(--bad); border-color: var(--bad); color: #fff; }
 .sheetlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .sheetlist li { display: flex; gap: 10px; align-items: center; font-size: 15px; }
 .sheetlist .xl { font: 700 11px/1 var(--f-mono); padding: 5px 6px; border-radius: 4px; background: var(--ok-bg); color: var(--ok); }
@@ -306,10 +307,12 @@ const SEVERIDADES = ["Baja", "Media", "Alta", "Crítica"];
 const SERVICIOS = ["Servicio programado por km", "Servicio mayor", "Engrase general", "Revisión de frenos", "Alineación y balanceo", "Rotación / cambio de neumáticos", "Revisión sistema eléctrico", "Cambio de filtros", "Cambio refrigerante", "Revisión técnica (preparación)", "Otro"];
 const ACEITES = ["15W-40", "10W-40", "5W-30", "10W-30", "SAE 40", "80W-90 (diferencial)", "75W-90 (caja)"];
 const FILTROS = [["fAceite", "Filtro de aceite"], ["fAire", "Filtro de aire"], ["fComb", "Filtro de combustible"], ["fSep", "Separador de agua"]];
+// Lo que el chofer puede marcar como falla al auditar una camioneta frigorífica
+const SISTEMAS_CHOFER = ["Equipo de frío", "Motor", "Frenos", "Neumáticos", "Luces", "Eléctrico / batería", "Dirección / suspensión", "Carrocería / puertas de la caja", "Fugas (aceite, agua, combustible)", "Otro"];
 // Aviso de mantención cuando faltan estos km o menos
 const AVISO_MANT_KM = 1000;
 
-// Flota de la empresa (N° 1 al 17 y 815). El programa del computador también la lee de aquí.
+// Flota de la empresa (N° 1 al 17 y 815). servidor.py también la lee de aquí; google/Codigo.gs tiene una copia.
 const FLOTA_INICIAL = /*FLOTA_INICIAL*/[{"id":"cam-1","interno":"1","patente":"STFF54","marca":"Mitsubishi","modelo":"Fuso Canter 413","tipoCamion":"Camioneta frigorífica","anio":2023,"intervalo":10000},
   {"id":"cam-2","interno":"2","patente":"STFG40","marca":"Mitsubishi","modelo":"Fuso Canter 413","tipoCamion":"Camioneta frigorífica","anio":2023,"intervalo":10000},
   {"id":"cam-3","interno":"3","patente":"STFF52","marca":"Mitsubishi","modelo":"Fuso Canter 413","tipoCamion":"Camioneta frigorífica","anio":2023,"intervalo":10000},
@@ -347,18 +350,23 @@ const sget = k => { try { return localStorage.getItem(k); } catch { return null;
 const sset = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 const sdel = k => { try { localStorage.removeItem(k); } catch {} };
 const EN_APK = location.protocol === "file:";
-// El APK de la empresa se construye con la dirección del computador y el código ya puestos (ver android/construir-apk.sh)
+// El APK de la empresa se construye con la dirección de la planilla y el código ya puestos (ver android/construir-apk.sh)
 const SERVIDOR_FIJO = "", CODIGO_FIJO = "";
 const codigoAcceso = () => sget("bf_codigo") || CODIGO_FIJO;
-// El link que entrega el computador trae el código de acceso: .../?c=ABC123
-(() => { try { const q = new URLSearchParams(location.search); const c = q.get("c"); if (c) { localStorage.setItem("bf_codigo", c.trim().toUpperCase()); history.replaceState(null, "", location.pathname); } } catch {} })();
+// El link para los celulares trae el código de acceso (?c=ABC123) y, si los datos van a Google, la dirección de la planilla (?u=...)
+(() => { try {
+  const q = new URLSearchParams(location.search), c = q.get("c"), u = q.get("u");
+  if (c) localStorage.setItem("bf_codigo", c.trim().toUpperCase());
+  if (u && /^https:\/\/script\.google\.com\//.test(u)) localStorage.setItem("bf_server", u.replace(/\?.*$/, ""));
+  if (c || u) history.replaceState(null, "", location.pathname);
+} catch {} })();
 
 function toast(msg) {
   const t = $("#toast"); t.textContent = msg; t.hidden = false;
   clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 2800);
 }
 
-/* ---------- Almacenamiento: planilla compartida (claude db), computador de la oficina (servidor.py) o solo este teléfono ---------- */
+/* ---------- Almacenamiento: planilla de Google (Apps Script), computador (servidor.py), planilla compartida (claude db) o solo este teléfono ---------- */
 const Store = {
   mode: "local", camiones: [], registros: [], db: null,
   outbox: [], pc: { conectado: false, codigoMal: false, pendiente: false, error: "", planilla: "", ultima: null }, syncing: false, again: false,
@@ -376,7 +384,7 @@ const Store = {
       this.badge(); return;
     }
     this.cargarLocal();
-    const enPC = this.base() !== null && await this.pedir("GET", this.url("api/estado")).then(r => r && r.app === "bitacora-flota").catch(() => false);
+    const enPC = this.base() !== null && await this.api("estado").then(r => r && r.app === "bitacora-flota").catch(() => false);
     if (enPC && !codigoAcceso()) this.pc.codigoMal = true;
     if (enPC || (this.base() !== null && (sget("bf_pc") === "1" || (EN_APK && SERVIDOR_FIJO)))) {
       // Sin señal en el primer uso igual se puede auditar: la flota de la empresa viene incluida
@@ -388,9 +396,22 @@ const Store = {
     if (this.mode === "local") UI.admin = sget("bf_admin_local") === "1";
     this.badge();
   },
-  // En la app Android (file://) la dirección del computador se configura; servida desde el computador es la misma página.
-  base() { return EN_APK ? (sget("bf_server") || SERVIDOR_FIJO || null) : ""; },
+  // Adónde se envían los datos: la planilla de Google (Apps Script), el computador con servidor.py,
+  // o, si la página la entrega el mismo computador, la misma dirección ("").
+  base() { return sget("bf_server") || SERVIDOR_FIJO || (EN_APK ? null : ""); },
   url(p) { return (this.base() || "") + p; },
+  esGoogle(b = this.base()) { return /^https:\/\/script\.google\.com\//.test(b || ""); },
+  // Google Apps Script recibe todo por POST en una sola dirección; servidor.py usa una ruta por acción.
+  async api(accion, cuerpo = {}, base = this.base()) {
+    if (this.esGoogle(base)) {
+      const r = await this.pedir("POST", base, { accion, codigo: codigoAcceso(), ...cuerpo }, true);
+      if (r && r.error === "codigo") { const e = new Error("codigo"); e.status = 401; throw e; }
+      return r;
+    }
+    const rutas = { estado: ["GET", "api/estado"], sync: ["POST", "api/sync"], admin: ["POST", "api/admin"] };
+    const [m, ruta] = rutas[accion];
+    return this.pedir(m, (base || "") + ruta, m === "POST" ? cuerpo : undefined);
+  },
   iniciarPC() {
     this.mode = "pc"; sset("bf_pc", "1"); UI.admin = !!sget("bf_pin");
     try { this.outbox = JSON.parse(sget("bf_outbox") || "[]"); } catch { this.outbox = []; }
@@ -399,19 +420,24 @@ const Store = {
     window.addEventListener("online", () => this.sync());
     document.addEventListener("visibilitychange", () => { if (!document.hidden) this.sync(); });
   },
-  // Acepta el link del computador (https://mi-flota.ngrok-free.dev/?c=ABC123), un dominio o una IP de la red local.
+  // Acepta el link de la planilla de Google (https://script.google.com/macros/s/.../exec?c=ABC123),
+  // el del computador (https://mi-flota.ngrok-free.dev/?c=ABC123) o una IP de la red local.
   async conectar(dir, codigo) {
-    let u = String(dir || "").trim(); if (!u) { toast("Escribe la dirección o pega el link que entrega el computador."); return; }
-    const m = u.match(/[?&]c=([A-Za-z0-9]+)/); if (m) { codigo = codigo || m[1]; u = u.replace(/\?.*$/, ""); }
+    let u = String(dir || "").trim(); if (!u) { toast("Pega el link que aparece en la planilla (hoja Configuración)."); return; }
+    try { const q = new URL(u.includes("://") ? u : "https://" + u).searchParams; if (q.get("u")) { codigo = codigo || q.get("c"); u = q.get("u"); } } catch {}
+    const m = u.match(/[?&]c=([A-Za-z0-9]+)/); if (m) codigo = codigo || m[1];
+    u = u.replace(/[?#].*$/, "");
     if (codigo) sset("bf_codigo", String(codigo).trim().toUpperCase());
-    if (!codigoAcceso()) { toast("Escribe el código de acceso que muestra la ventana del computador."); return; }
+    if (!codigoAcceso()) { toast("Escribe el código de acceso que aparece en la planilla (hoja Configuración)."); return; }
     const local = /^(https?:\/\/)?(localhost|\d{1,3}(\.\d{1,3}){3})(:|\/|$)/i.test(u);
     if (!/^https?:\/\//i.test(u)) u = (local ? "http://" : "https://") + u;
-    if (local && !/:\d+(\/|$)/.test(u.replace(/^https?:\/\//i, ""))) u = u.replace(/\/*$/, "") + ":8080";
-    u = u.replace(/\/*$/, "/");
-    const r = await this.pedir("GET", u + "api/estado").catch(() => null);
-    if (!r || r.app !== "bitacora-flota") { toast("No se encontró el computador en " + u + ". Revisa que el programa esté abierto y la dirección esté bien escrita."); return; }
-    if (!r.codigoOk) { this.pc.codigoMal = true; this.badge(); render(); toast("El código de acceso no es correcto. Revísalo en la ventana del computador."); return; }
+    if (!this.esGoogle(u)) {
+      if (local && !/:\d+(\/|$)/.test(u.replace(/^https?:\/\//i, ""))) u = u.replace(/\/*$/, "") + ":8080";
+      u = u.replace(/\/*$/, "/");
+    }
+    const r = await this.api("estado", {}, u).catch(() => null);
+    if (!r || r.app !== "bitacora-flota") { toast("No se pudo conectar con " + u + ". Revisa que el link esté completo y que el celular tenga internet."); return; }
+    if (!r.codigoOk) { this.pc.codigoMal = true; this.badge(); render(); toast("El código de acceso no es correcto. Revísalo en la planilla (hoja Configuración)."); return; }
     const antes = this.mode;
     sset("bf_server", u); this.iniciarPC();
     if (antes === "local") {
@@ -419,35 +445,36 @@ const Store = {
       for (const c of this.camiones.filter(x => !x.ejemplo)) this.outbox.push({ col: "camiones", op: "set", doc: c });
       sset("bf_outbox", JSON.stringify(this.outbox));
     }
-    await this.sync(); toast(this.pc.conectado ? "Conectado al computador" : "No se pudo conectar con el computador");
+    await this.sync(); toast(this.pc.conectado ? "Conectado a la planilla" : "No se pudo conectar con la planilla");
   },
   async guardarCodigo(codigo) {
     codigo = String(codigo || "").trim().toUpperCase();
     if (!codigo) { toast("Escribe el código de acceso."); return; }
     sset("bf_codigo", codigo); await this.sync();
-    toast(this.pc.codigoMal ? "El código de acceso no es correcto." : "Código guardado. Conectado al computador.");
+    toast(this.pc.codigoMal ? "El código de acceso no es correcto." : "Código guardado. Conectado a la planilla.");
   },
   cargarLocal() {
     try { const raw = sget("bf_data"); if (raw) { const d = JSON.parse(raw); this.camiones = d.camiones || []; this.registros = d.registros || []; } } catch {}
   },
-  async pedir(method, url, body) {
-    const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 15000);
+  // simple: sin cabeceras propias (Google Apps Script no acepta la consulta previa CORS)
+  async pedir(method, url, body, simple) {
+    const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 30000);
     try {
-      const headers = { "X-Codigo": codigoAcceso(), "ngrok-skip-browser-warning": "1" };
-      if (body) headers["Content-Type"] = "application/json";
+      const headers = simple ? { "Content-Type": "text/plain;charset=utf-8" } : { "X-Codigo": codigoAcceso(), "ngrok-skip-browser-warning": "1" };
+      if (body && !simple) headers["Content-Type"] = "application/json";
       const r = await fetch(url, { method, signal: ac.signal, cache: "no-store", headers, body: body ? JSON.stringify(body) : undefined });
       if (!r.ok) { const e = new Error("HTTP " + r.status); e.status = r.status; throw e; }
       return await r.json();
     } finally { clearTimeout(t); }
   },
-  // Envía los cambios pendientes al computador y trae la versión completa de la planilla.
+  // Envía los cambios pendientes a la planilla y trae su versión completa.
   async sync() {
     if (this.mode !== "pc") return;
     if (this.syncing) { this.again = true; return; }
     this.syncing = true;
     const enviados = this.outbox.slice();
     try {
-      const r = await this.pedir("POST", this.url("api/sync"), { cambios: enviados, pin: sget("bf_pin") || "" });
+      const r = await this.api("sync", { cambios: enviados, pin: sget("bf_pin") || "" });
       if (r.rechazados) toast("Solo el administrador puede agregar o modificar camiones. Se descartaron " + r.rechazados + " cambio" + (r.rechazados === 1 ? "" : "s") + ".");
       UI.admin = !!r.admin;
       this.outbox = this.outbox.slice(enviados.length);
@@ -472,9 +499,9 @@ const Store = {
     else if (this.mode === "pc") {
       const n = this.outbox.length;
       if (this.pc.codigoMal) { cls = "local"; txt = "Falta código de acceso"; }
-      else if (!this.pc.conectado) { cls = "local"; txt = n ? `Sin PC · ${n} por enviar` : "Sin conexión al PC"; }
+      else if (!this.pc.conectado) { cls = "local"; txt = n ? `Sin conexión · ${n} por enviar` : "Sin conexión"; }
       else if (this.pc.pendiente) { cls = "local"; txt = "PC · cierra el Excel"; }
-      else { cls = "shared"; txt = "PC · planilla al día"; }
+      else { cls = "shared"; txt = this.esGoogle() ? "Planilla al día" : "PC · planilla al día"; }
     } else txt = "En este teléfono";
     m.className = "mode " + cls; m.textContent = txt;
   },
@@ -509,9 +536,9 @@ function soloAdmin() {
 async function entrarAdmin(pin) {
   pin = String(pin || "").trim();
   if (Store.mode === "pc") {
-    const r = await Store.pedir("POST", Store.url("api/admin"), { pin }).catch(() => null);
-    if (!r) { toast("No hay conexión con el computador. Revisa la señal e intenta de nuevo."); return; }
-    if (!r.ok) { toast("PIN incorrecto. Revisa el PIN que muestra la ventana del computador."); return; }
+    const r = await Store.api("admin", { pin }).catch(() => null);
+    if (!r) { toast("No hay conexión con la planilla. Revisa la señal e intenta de nuevo."); return; }
+    if (!r.ok) { toast("PIN incorrecto. Revísalo en la planilla (hoja Configuración)."); return; }
     sset("bf_pin", pin); UI.admin = true;
   } else {
     const guardado = sget("bf_pin_local");
@@ -591,7 +618,7 @@ function estadoMant(c) {
 function deshieloPendiente(c) { const a = ultimo(c.id, "auditoria"); return a && a.deshielo === true && !a.deshieloHecho ? a : null; }
 function tituloRegistro(r) {
   switch (r.tipo) {
-    case "auditoria": return `Auditoría · ${r.deshielo ? (r.deshieloHecho ? "deshielo hecho" : "necesita deshielo") : "sin deshielo"}${num(r.proximaMant) != null ? " · mant. " + fmtKm(num(r.proximaMant)) : ""}`;
+    case "auditoria": return `Auditoría${r.fallas ? ` · ${r.fallas} falla${r.fallas === 1 ? "" : "s"}` : ""} · ${r.deshielo ? (r.deshieloHecho ? "deshielo hecho" : "necesita deshielo") : "sin deshielo"}${num(r.proximaMant) != null ? " · mant. " + fmtKm(num(r.proximaMant)) : ""}`;
     case "preventiva": return r.servicio || "Mantención preventiva";
     case "correctiva": return `${r.sistema || "Correctiva"}${r.causa ? ": " + r.causa : ""}`;
     case "falla": return `Falla ${r.severidad ? r.severidad.toLowerCase() : ""} · ${r.sistema || ""}`;
@@ -654,7 +681,7 @@ function render() {
 const ejemploBanner = () => Store.camiones.some(c => c.ejemplo)
   ? `<div class="banner"><span>Estás viendo datos de ejemplo.</span>${UI.admin ? `<button class="btn sm" data-act="borrar-ejemplos">Borrar ejemplos</button>` : ""}</div>` : "";
 const apkBanner = () => EN_APK && Store.mode !== "pc"
-  ? `<div class="banner"><span>Conecta la app al computador para que los registros lleguen a la planilla Excel.</span><button class="btn sm" data-nav-link="planilla">Conectar</button></div>`
+  ? `<div class="banner"><span>Conecta la app a la planilla para que las auditorías lleguen a Google Drive.</span><button class="btn sm" data-nav-link="planilla">Conectar</button></div>`
   : Store.mode === "pc" && Store.pc.codigoMal
   ? `<div class="banner"><span>Falta el código de acceso: los registros quedan en este teléfono hasta ingresarlo.</span><button class="btn sm" data-nav-link="planilla">Ingresar código</button></div>` : "";
 
@@ -954,27 +981,28 @@ function vHistorial() {
 }
 
 function tarjetasConexion() {
-  const P = Store.pc;
+  const P = Store.pc, G = Store.esGoogle(), donde = G ? "la planilla (hoja Configuración)" : "la ventana del programa en el computador";
   const pcPanel = Store.mode !== "pc" ? "" : `<div class="panel" style="padding:16px;display:grid;gap:10px">
-    <div class="spread"><h3>Planilla en el computador</h3><span class="pill ${!P.conectado ? "warn" : P.pendiente ? "warn" : "ok"}">${!P.conectado ? "Sin conexión" : P.pendiente ? "Excel abierto" : "Al día"}</span></div>
-    ${P.planilla ? `<span class="num small" style="overflow-wrap:anywhere">${esc(P.planilla)}</span>` : ""}
+    <div class="spread"><h3>${G ? "Planilla en Google Drive" : "Planilla en el computador"}</h3><span class="pill ${!P.conectado ? "warn" : P.pendiente ? "warn" : "ok"}">${!P.conectado ? "Sin conexión" : P.pendiente ? "Excel abierto" : "Al día"}</span></div>
+    ${!P.planilla ? "" : G ? (UI.admin ? `<a class="btn" href="${esc(P.planilla)}" target="_blank" rel="noopener">Abrir la planilla</a>` : "") : `<span class="num small" style="overflow-wrap:anywhere">${esc(P.planilla)}</span>`}
     <span class="small muted">${!P.conectado
-      ? `No se pudo conectar con el computador. ${Store.outbox.length ? `${Store.outbox.length} cambio${Store.outbox.length === 1 ? "" : "s"} esperando; se enviarán solos cuando haya conexión.` : "Los registros nuevos quedarán guardados en este teléfono hasta reconectar."} Revisa que el celular tenga internet y que el programa esté abierto en el computador.`
+      ? `No se pudo conectar con la planilla. ${Store.outbox.length ? `${Store.outbox.length} cambio${Store.outbox.length === 1 ? "" : "s"} esperando; se enviarán solos cuando haya conexión.` : "Los registros nuevos quedarán guardados en este teléfono hasta reconectar."} ${G ? "Revisa que el celular tenga internet." : "Revisa que el celular tenga internet y que el programa esté abierto en el computador."}`
       : P.pendiente ? esc(P.error || "La planilla está abierta en Excel. Ciérrala en el computador y se actualizará sola.")
       : `Cada registro se agrega solo a la planilla.${P.ultima ? " Última actualización: " + esc(P.ultima.replace("T", " ")) : ""}`}</span>
     <button class="btn" data-act="sync">Enviar ahora</button></div>`;
-  const srvCard = !EN_APK && !(Store.mode === "pc" && (P.codigoMal || !codigoAcceso())) ? "" : `<div class="panel" style="padding:16px;display:grid;gap:10px">
-    <div class="spread"><h3>Conexión con el computador</h3>${P.codigoMal ? `<span class="pill bad">Código incorrecto</span>` : ""}</div>
-    <span class="small muted">${EN_APK ? "Pega el link que muestra la ventana del programa en el computador, o escribe la dirección y el código de acceso. Funciona con cualquier conexión a internet." : "Escribe el código de acceso que muestra la ventana del programa en el computador."}</span>
-    ${EN_APK ? `<label class="field"><span>Link o dirección</span><input id="srv-url" inputmode="url" autocapitalize="none" autocomplete="off" placeholder="mi-flota.ngrok-free.dev" value="${esc((sget("bf_server") || SERVIDOR_FIJO).replace(/^https?:\/\//, "").replace(/\/$/, ""))}"></label>` : ""}
+  const conLink = EN_APK || Store.mode === "local";
+  const srvCard = !conLink && !(Store.mode === "pc" && (P.codigoMal || !codigoAcceso())) ? "" : `<div class="panel" style="padding:16px;display:grid;gap:10px">
+    <div class="spread"><h3>Conexión con la planilla</h3>${P.codigoMal ? `<span class="pill bad">Código incorrecto</span>` : ""}</div>
+    <span class="small muted">${conLink ? "Pega el link para los celulares que aparece en la planilla de Google, en la hoja Configuración. Funciona con cualquier conexión a internet." : `Escribe el código de acceso que aparece en ${donde}.`}</span>
+    ${conLink ? `<label class="field"><span>Link</span><input id="srv-url" inputmode="url" autocapitalize="none" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec?c=…" value="${esc(sget("bf_server") || SERVIDOR_FIJO)}"></label>` : ""}
     <label class="field"><span>Código de acceso</span><input id="srv-codigo" autocapitalize="characters" autocomplete="off" placeholder="Ej. K7PQ3M" value="${esc(codigoAcceso())}"></label>
-    <button class="btn primary" data-act="${EN_APK ? "conectar" : "codigo"}">${EN_APK && Store.mode === "pc" ? "Guardar conexión" : "Conectar"}</button></div>`;
+    <button class="btn primary" data-act="${conLink ? "conectar" : "codigo"}">${Store.mode === "pc" && conLink ? "Guardar conexión" : "Conectar"}</button></div>`;
   const adminCard = `<div class="panel" style="padding:16px;display:grid;gap:10px">
     <div class="spread"><h3>Administrador</h3>${UI.admin ? `<span class="pill ok">Activo</span>` : ""}</div>
     ${UI.admin
       ? `<span class="small muted">Puedes agregar, editar y borrar camiones.</span>${Store.mode === "shared" ? "" : `<button class="btn" data-act="admin-salir">Salir del modo administrador</button>`}`
       : Store.mode === "shared" ? `<span class="small muted">Solo los editores de esta página pueden agregar o modificar camiones.</span>`
-      : `<span class="small muted">${Store.mode === "pc" ? "Solo el administrador agrega, edita o borra camiones. El PIN aparece en la ventana del programa en el computador."
+      : `<span class="small muted">${Store.mode === "pc" ? `Solo el administrador agrega, edita o borra camiones. El PIN aparece en ${donde}.`
           : sget("bf_pin_local") ? "Solo el administrador agrega, edita o borra camiones en este teléfono." : "Crea un PIN de administrador para este teléfono (mínimo 4 números)."}</span>
         <label class="field"><span>PIN</span><input id="admin-pin" type="password" inputmode="numeric" autocomplete="off"></label>
         <button class="btn primary" data-act="admin-entrar">${Store.mode !== "pc" && !sget("bf_pin_local") ? "Crear PIN" : "Entrar"}</button>`}</div>`;
@@ -988,9 +1016,9 @@ function vChofer() {
     const c = camion(ch.enviado.camionId) || {};
     return `<div class="panel empty" style="gap:14px">
       <svg viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M7 12.5l3.2 3.2L17 9"/></svg>
-      <h2>Auditoría enviada</h2>
+      <h2>Auditoría enviada</h2>${ch.enviado.fallas ? `<span class="pill bad">${ch.enviado.fallas} falla${ch.enviado.fallas === 1 ? "" : "s"} reportada${ch.enviado.fallas === 1 ? "" : "s"}</span>` : ""}
       <div class="row" style="justify-content:center">${plate(c.patente, true)}</div>
-      <p class="muted" style="margin:0;max-width:34ch">${Store.mode === "pc" ? "Se agrega a la planilla del computador. Si no hay señal, queda guardada en el teléfono y se envía sola." : Store.mode === "shared" ? "Quedó guardada en la planilla." : "Quedó guardada en este teléfono."}</p>
+      <p class="muted" style="margin:0;max-width:34ch">${Store.mode === "pc" ? "Se agrega a la planilla. Si no hay señal, queda guardada en el teléfono y se envía sola." : Store.mode === "shared" ? "Quedó guardada en la planilla." : "Quedó guardada en este teléfono."}</p>
       <button class="btn primary block" data-act="chofer-otra" style="min-height:52px">Auditar otro camión</button>
     </div>`;
   }
@@ -1003,11 +1031,23 @@ function vChofer() {
       <div style="flex:1;min-width:0"><div style="font-weight:600">${esc(c.marca || "")} ${esc(c.modelo || "")}</div><div class="small muted">${kmDe(c) != null ? `Último odómetro: <span class="num">${fmtKm(kmDe(c))}</span>` : "Sin odómetro registrado"}</div></div>
     </div>
     <form id="f-chofer" class="panel" style="padding:16px;gap:20px" novalidate>
-      <label class="field"><span>Odómetro (km)</span><input id="ch-km" class="big" type="number" inputmode="numeric" min="0" required placeholder="${esc(kmDe(c) ?? "Ej. 45210")}"></label>
-      <label class="field"><span>Próxima mantención (km)</span><input id="ch-mant" class="big" type="number" inputmode="numeric" min="0" required value="${esc(mt.km ?? "")}" placeholder="Ej. 50000"></label>
-      <label class="field"><span>Responsable de la auditoría</span><input id="ch-resp" class="big" autocomplete="name" required value="${esc(sget("bf_resp") || "")}" placeholder="Nombre y apellido"></label>
+      <label class="field"><span>Odómetro (km)</span><input id="ch-km" class="big" type="number" inputmode="numeric" min="0" required value="${esc(ch.km ?? "")}" placeholder="${esc(kmDe(c) ?? "Ej. 45210")}"></label>
+      <label class="field"><span>Próxima mantención (km)</span><input id="ch-mant" class="big" type="number" inputmode="numeric" min="0" required value="${esc(ch.mant ?? mt.km ?? "")}" placeholder="Ej. 50000"></label>
+      <label class="field"><span>Responsable de la auditoría</span><input id="ch-resp" class="big" autocomplete="name" required value="${esc(ch.resp ?? sget("bf_resp") ?? "")}" placeholder="Nombre y apellido"></label>
       <div class="field"><span>¿Necesita deshielo?</span>
         <div class="grid2"><button type="button" class="sino" data-sino="si" aria-pressed="${ch.deshielo === true}">Sí</button><button type="button" class="sino" data-sino="no" aria-pressed="${ch.deshielo === false}">No</button></div></div>
+      <div class="field"><span>¿Tiene fallas?</span>
+        <div class="grid2"><button type="button" class="sino" data-fallas="si" aria-pressed="${ch.tieneFallas === true}">Sí</button><button type="button" class="sino" data-fallas="no" aria-pressed="${ch.tieneFallas === false}">No</button></div></div>
+      ${ch.tieneFallas ? `<div class="fieldset" style="gap:16px;border-color:var(--bad)">
+        ${(ch.fallas || []).map((f, i) => `<div style="display:grid;gap:10px">
+          <div class="spread"><b>Falla ${i + 1}</b>${ch.fallas.length > 1 ? `<button type="button" class="linkbtn" data-act="falla-quitar" data-i="${i}" style="color:var(--bad)">Quitar</button>` : ""}</div>
+          <label class="field"><span>¿Qué falla?</span><select id="ch-fs-${i}" data-falla-sistema="${i}"><option value="">Selecciona…</option>${SISTEMAS_CHOFER.map(x => `<option ${x === f.sistema ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
+          <label class="field"><span>Describe la falla</span><textarea id="ch-fd-${i}" data-falla-desc="${i}" placeholder="Ej. el equipo de frío no baja de 8 °C" style="min-height:70px">${esc(f.desc || "")}</textarea></label>
+        </div>`).join("")}
+        <button type="button" class="btn" data-act="falla-otra">+ Agregar otra falla</button>
+        <div class="field"><span>¿La camioneta puede seguir trabajando?</span>
+          <div class="grid2"><button type="button" class="sino" data-opera="si" aria-pressed="${ch.opera === true}">Sí</button><button type="button" class="sino" data-opera="no" aria-pressed="${ch.opera === false}">No</button></div></div>
+      </div>` : ""}
       <button class="btn primary block" type="submit" style="min-height:56px;font-size:18px">Enviar auditoría</button>
     </form>`;
   }
@@ -1027,18 +1067,39 @@ function vChofer() {
     <button class="linkbtn" data-nav-link="ajustes" style="justify-self:center;padding:8px">Ajustes y conexión</button>`;
 }
 
+// Guarda lo escrito en el formulario del chofer antes de redibujarlo (al agregar o quitar fallas)
+function leerChofer() {
+  const ch = UI.chofer; if (!$("#f-chofer")) return ch;
+  ch.km = $("#ch-km").value; ch.mant = $("#ch-mant").value; ch.resp = $("#ch-resp").value;
+  (ch.fallas || []).forEach((f, i) => { const s = $("#ch-fs-" + i), d = $("#ch-fd-" + i); if (s) f.sistema = s.value; if (d) f.desc = d.value; });
+  return ch;
+}
+function redibujarChofer() { const y = window.scrollY; $("#app").innerHTML = vChofer(); window.scrollTo(0, y); }
+
 async function enviarChofer(e) {
   e.preventDefault();
   const c = camion(UI.chofer.camionId); if (!c) return;
-  const km = num($("#ch-km").value), mant = num($("#ch-mant").value), resp = $("#ch-resp").value.trim(), dh = UI.chofer.deshielo;
+  const ch = leerChofer();
+  const km = num(ch.km), mant = num(ch.mant), resp = String(ch.resp || "").trim(), dh = ch.deshielo;
+  const fallas = ch.tieneFallas ? (ch.fallas || []).map(f => ({ sistema: f.sistema, desc: String(f.desc || "").trim() })) : [];
   const falta = [];
   if (km == null) falta.push("odómetro"); if (mant == null) falta.push("próxima mantención"); if (!resp) falta.push("responsable"); if (dh !== true && dh !== false) falta.push("si necesita deshielo");
+  if (ch.tieneFallas !== true && ch.tieneFallas !== false) falta.push("si tiene fallas");
+  if (ch.tieneFallas && fallas.some(f => !f.sistema)) falta.push("qué falla");
+  if (ch.tieneFallas && ch.opera !== true && ch.opera !== false) falta.push("si puede seguir trabajando");
   if (falta.length) { toast("Falta completar: " + falta.join(", ")); return; }
   if (km < (kmDe(c) ?? 0)) { toast(`El odómetro no puede ser menor que el último registrado (${fmtKm(kmDe(c))}). Revisa el número.`); return; }
   sset("bf_resp", resp);
-  const r = { id: uid(), creado: Date.now(), tipo: "auditoria", camionId: c.id, patente: normPatente(c.patente), fecha: hoy(), km, proximaMant: mant, responsable: resp, deshielo: dh, estado: "Cerrado", cerrado: hoy(), descripcion: "" };
-  try { await Store.save("registros", r); } catch { return; }
-  UI.chofer = { enviado: { camionId: c.id } }; $("#app").innerHTML = ""; render(); window.scrollTo(0, 0);
+  const resumen = fallas.map(f => f.sistema + (f.desc ? ": " + f.desc : "")).join("; ");
+  const r = { id: uid(), creado: Date.now(), tipo: "auditoria", camionId: c.id, patente: normPatente(c.patente), fecha: hoy(), km, proximaMant: mant, responsable: resp, deshielo: dh,
+    fallas: fallas.length, fallasResumen: resumen, estado: "Cerrado", cerrado: hoy(), descripcion: "" };
+  try {
+    await Store.save("registros", r);
+    // Cada falla queda también como registro propio, para seguirla hasta repararla
+    for (const f of fallas) await Store.save("registros", { id: uid(), creado: Date.now(), tipo: "falla", camionId: c.id, patente: r.patente, fecha: r.fecha, km, responsable: resp,
+      sistema: f.sistema, severidad: ch.opera ? "Media" : "Alta", detenido: !ch.opera, estado: "Pendiente", descripcion: f.desc, auditoriaId: r.id, origen: "Auditoría" });
+  } catch { return; }
+  UI.chofer = { enviado: { camionId: c.id, fallas: fallas.length } }; $("#app").innerHTML = ""; render(); window.scrollTo(0, 0);
 }
 
 function vAjustes() {
@@ -1068,7 +1129,7 @@ function vPlanilla() {
   </div>
   <section><h2>Dónde se guardan los datos</h2>
     <p class="muted" style="margin:0">${Store.mode === "pc"
-      ? "Los registros se guardan en la planilla Excel del computador, desde cualquier celular y cualquier lugar con internet. Si no hay señal, quedan en este teléfono y se envían solos al volver la conexión."
+      ? "Los registros se guardan en la planilla " + (Store.esGoogle() ? "de Google Drive" : "Excel del computador") + ", desde cualquier celular y cualquier lugar con internet. Si no hay señal, quedan en este teléfono y se envían solos al volver la conexión."
       : Store.mode === "shared"
       ? "Los registros se guardan en la planilla compartida de esta página. Todas las personas con acceso ven y agregan a los mismos datos, desde cualquier teléfono."
       : "Los registros se guardan en este teléfono, incluso sin internet. Descarga la planilla o un respaldo con frecuencia: si borras los datos del navegador se pierden."}</p>
@@ -1088,6 +1149,7 @@ function verRegistro(id) {
   let extra = "";
   if (r.tipo === "auditoria") {
     extra = kv("Próxima mantención", num(r.proximaMant) != null ? `<span class="num">${fmtKm(num(r.proximaMant))}</span>` : "") +
+      kv("Fallas reportadas", r.fallas ? esc(r.fallasResumen) : "") +
       kv("Necesita deshielo", r.deshielo ? (r.deshieloHecho ? `Sí · realizado el ${fmtFecha(r.deshieloHecho)}` : `<span class="pill bad">Sí, pendiente</span>${UI.admin ? ` <button class="btn sm" data-act="deshielo-hecho" data-id="${esc(r.id)}">Marcar hecho</button>` : ""}`) : "No");
   }
   if (r.tipo === "preventiva") extra = kv("Servicio", esc(r.servicio)) + kv("Repuestos", esc(r.repuestos)) + kv("Próximo", r.proximoKm ? fmtKm(r.proximoKm) : "") + kv("Próxima fecha", r.proximaFecha ? fmtFecha(r.proximaFecha) : "");
@@ -1157,12 +1219,12 @@ async function exportarExcel() {
       "Fallas abiertas": abiertas(c.id).length, "Última auditoría": au?.fecha || "", "Estado": estadoCamion(c).texto, "Notas": c.notas || "" };
   }), flotaH), "Flota");
 
-  const audH = ["Fecha", "N° interno", "Patente", "Vehículo", "Odómetro (km)", "Próxima mantención (km)", "Km para mantención", "Responsable", "Necesita deshielo", "Deshielo realizado"];
+  const audH = ["Fecha", "N° interno", "Patente", "Vehículo", "Odómetro (km)", "Próxima mantención (km)", "Km para mantención", "Responsable", "Necesita deshielo", "Deshielo realizado", "Fallas reportadas", "Detalle de fallas"];
   XLSX.utils.book_append_sheet(wb, hoja(regs.filter(r => r.tipo === "auditoria").map(r => {
     const c = camion(r.camionId) || {};
     return { "Fecha": r.fecha, "N° interno": c.interno || "", "Patente": pat(r), "Vehículo": [c.marca, c.modelo].filter(Boolean).join(" "), "Odómetro (km)": r.km,
       "Próxima mantención (km)": num(r.proximaMant) ?? "", "Km para mantención": num(r.proximaMant) != null && r.km != null ? num(r.proximaMant) - r.km : "",
-      "Responsable": r.responsable, "Necesita deshielo": r.deshielo ? "Sí" : "No", "Deshielo realizado": r.deshieloHecho || "" };
+      "Responsable": r.responsable, "Necesita deshielo": r.deshielo ? "Sí" : "No", "Deshielo realizado": r.deshieloHecho || "", "Fallas reportadas": r.fallas || 0, "Detalle de fallas": r.fallasResumen || "" };
   }), audH), "Auditorías");
 
   const preH = ["Fecha", "Patente", "Km", "Responsable", "Servicio", "Repuestos", "Próximo (km)", "Próxima fecha", "Costo CLP", "Estado", "Observaciones"];
@@ -1171,8 +1233,8 @@ async function exportarExcel() {
   const corH = ["Fecha", "Patente", "Km", "Responsable", "Sistema", "Causa", "Repuestos", "Horas taller", "Taller", "Costo CLP", "Estado", "Fecha cierre", "Observaciones"];
   XLSX.utils.book_append_sheet(wb, hoja(regs.filter(r => r.tipo === "correctiva").map(r => ({ ...base(r), "Responsable": r.responsable, "Sistema": r.sistema, "Causa": r.causa, "Repuestos": r.repuestos, "Horas taller": r.horas ?? "", "Taller": r.taller, "Costo CLP": r.costo ?? "", "Estado": r.estado, "Fecha cierre": r.cerrado || "", "Observaciones": r.descripcion })), corH), "Correctivas");
 
-  const falH = ["Fecha", "Patente", "Km", "Reportado por", "Sistema", "Severidad", "Camión detenido", "Estado", "Fecha cierre", "Descripción"];
-  XLSX.utils.book_append_sheet(wb, hoja(regs.filter(r => r.tipo === "falla").map(r => ({ ...base(r), "Reportado por": r.responsable, "Sistema": r.sistema, "Severidad": r.severidad, "Camión detenido": sn(r.detenido), "Estado": r.estado, "Fecha cierre": r.cerrado || "", "Descripción": r.descripcion })), falH), "Fallas");
+  const falH = ["Fecha", "N° interno", "Patente", "Km", "Reportado por", "Origen", "Sistema", "Severidad", "Camión detenido", "Estado", "Fecha cierre", "Descripción"];
+  XLSX.utils.book_append_sheet(wb, hoja(regs.filter(r => r.tipo === "falla").map(r => ({ ...base(r), "N° interno": camion(r.camionId)?.interno || "", "Origen": r.origen || "Registro", "Reportado por": r.responsable, "Sistema": r.sistema, "Severidad": r.severidad, "Camión detenido": sn(r.detenido), "Estado": r.estado, "Fecha cierre": r.cerrado || "", "Descripción": r.descripcion })), falH), "Fallas");
 
   const aceH = ["Fecha", "Patente", "Km", "Responsable", "Aceite", "Litros", ...FILTROS.map(([, l]) => l), "Próximo cambio (km)", "Costo CLP", "Observaciones"];
   XLSX.utils.book_append_sheet(wb, hoja(regs.filter(r => r.tipo === "aceite").map(r => ({ ...base(r), "Responsable": r.responsable, "Aceite": r.tipoAceite, "Litros": r.litros ?? "", ...Object.fromEntries(FILTROS.map(([k, l]) => [l, sn(r[k])])), "Próximo cambio (km)": r.proximoKm ?? "", "Costo CLP": r.costo ?? "", "Observaciones": r.descripcion })), aceH), "Cambios de aceite");
@@ -1201,6 +1263,9 @@ async function importarJSON(file) {
 document.addEventListener("click", async e => {
   const nav = e.target.closest("[data-nav]"); if (nav) { go(nav.dataset.nav); return; }
   const nl = e.target.closest("[data-nav-link]"); if (nl) { go(!UI.admin && nl.dataset.navLink === "planilla" ? "ajustes" : nl.dataset.navLink); return; }
+  const fb = e.target.closest("[data-fallas]");
+  if (fb) { const ch = leerChofer(); ch.tieneFallas = fb.dataset.fallas === "si"; if (ch.tieneFallas && !(ch.fallas || []).length) ch.fallas = [{}]; redibujarChofer(); return; }
+  const op = e.target.closest("[data-opera]"); if (op) { UI.chofer.opera = op.dataset.opera === "si"; document.querySelectorAll("[data-opera]").forEach(b => b.setAttribute("aria-pressed", b === op)); return; }
   const sino = e.target.closest("[data-sino]"); if (sino) { UI.chofer.deshielo = sino.dataset.sino === "si"; document.querySelectorAll("[data-sino]").forEach(b => b.setAttribute("aria-pressed", b === sino)); return; }
   const ft = e.target.closest("[data-filtro-tipo]"); if (ft) { UI.filtro.tipo = ft.dataset.filtroTipo; render(); return; }
   const el = e.target.closest("[data-act]"); if (!el) return;
@@ -1209,6 +1274,8 @@ document.addEventListener("click", async e => {
     case "cerrar": if (e.target === el || el.tagName === "BUTTON") closeSheet(); break;
     case "ver-reg": verRegistro(id); break;
     case "chofer-camion": UI.chofer = { camionId: id }; $("#app").innerHTML = ""; render(); window.scrollTo(0, 0); break;
+    case "falla-otra": { const ch = leerChofer(); ch.fallas = [...(ch.fallas || []), {}]; redibujarChofer(); break; }
+    case "falla-quitar": { const ch = leerChofer(); ch.fallas.splice(Number(el.dataset.i), 1); redibujarChofer(); break; }
     case "chofer-volver": UI.chofer = {}; $("#app").innerHTML = ""; render(); break;
     case "chofer-otra": UI.chofer = {}; go("chofer"); break;
     case "chofer-inicio": go(UI.admin ? "inicio" : "chofer"); break;
@@ -1243,7 +1310,7 @@ document.addEventListener("click", async e => {
     case "admin-salir": salirAdmin(); break;
     case "conectar": Store.conectar($("#srv-url").value, $("#srv-codigo").value); break;
     case "codigo": Store.guardarCodigo($("#srv-codigo").value); break;
-    case "sync": await Store.sync(); toast(Store.pc.conectado ? "Planilla del computador sincronizada" : "No se pudo conectar con el computador"); break;
+    case "sync": await Store.sync(); toast(Store.pc.conectado ? "Planilla al día" : "No se pudo conectar con la planilla"); break;
     case "respaldo": guardarArchivo(`Bitacora_Flota_respaldo_${hoy()}.json`, new Blob([JSON.stringify({ app: "bitacora-flota", version: 1, exportado: new Date().toISOString(), camiones: Store.camiones, registros: Store.registros }, null, 1)], { type: "application/json" })); break;
   }
 });

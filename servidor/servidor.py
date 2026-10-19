@@ -295,10 +295,10 @@ def construir_excel(d):
         c = camiones.get(r.get("camionId")) or {}
         return c.get("interno"), " ".join(x for x in (c.get("marca"), c.get("modelo")) if x)
 
-    hoja("Auditorías", ["Fecha", "N° interno", "Patente", "Vehículo", "Odómetro (km)", "Próxima mantención (km)", "Km para mantención", "Responsable", "Necesita deshielo", "Deshielo realizado"],
+    hoja("Auditorías", ["Fecha", "N° interno", "Patente", "Vehículo", "Odómetro (km)", "Próxima mantención (km)", "Km para mantención", "Responsable", "Necesita deshielo", "Deshielo realizado", "Fallas reportadas", "Detalle de fallas"],
          [[fecha(r.get("fecha")), vehiculo(r)[0], pat(r), vehiculo(r)[1], r.get("km"), r.get("proximaMant"),
            r["proximaMant"] - r["km"] if isinstance(r.get("proximaMant"), (int, float)) and isinstance(r.get("km"), (int, float)) else None,
-           r.get("responsable"), sn(r.get("deshielo")), fecha(r.get("deshieloHecho"))]
+           r.get("responsable"), sn(r.get("deshielo")), fecha(r.get("deshieloHecho")), r.get("fallas") or 0, r.get("fallasResumen")]
           for r in regs if r.get("tipo") == "auditoria"])
     hoja("Preventivas", ["Fecha", "Patente", "Odómetro (km)", "Responsable", "Servicio", "Repuestos", "Próximo (km)", "Próxima fecha", "Costo CLP", "Estado", "Observaciones"],
          [[*base(r), r.get("responsable"), r.get("servicio"), r.get("repuestos"), r.get("proximoKm"), fecha(r.get("proximaFecha")), r.get("costo"), r.get("estado"), r.get("descripcion")]
@@ -306,8 +306,8 @@ def construir_excel(d):
     hoja("Correctivas", ["Fecha", "Patente", "Odómetro (km)", "Responsable", "Sistema", "Causa", "Repuestos", "Horas taller", "Taller", "Costo CLP", "Estado", "Fecha cierre", "Observaciones"],
          [[*base(r), r.get("responsable"), r.get("sistema"), r.get("causa"), r.get("repuestos"), r.get("horas"), r.get("taller"), r.get("costo"), r.get("estado"), fecha(r.get("cerrado")), r.get("descripcion")]
           for r in regs if r.get("tipo") == "correctiva"])
-    hoja("Fallas", ["Fecha", "Patente", "Odómetro (km)", "Reportado por", "Sistema", "Severidad", "Camión detenido", "Estado", "Fecha cierre", "Descripción"],
-         [[*base(r), r.get("responsable"), r.get("sistema"), r.get("severidad"), sn(r.get("detenido")), r.get("estado"), fecha(r.get("cerrado")), r.get("descripcion")]
+    hoja("Fallas", ["Fecha", "Patente", "Odómetro (km)", "N° interno", "Reportado por", "Origen", "Sistema", "Severidad", "Camión detenido", "Estado", "Fecha cierre", "Descripción"],
+         [[*base(r), vehiculo(r)[0], r.get("responsable"), r.get("origen") or "Registro", r.get("sistema"), r.get("severidad"), sn(r.get("detenido")), r.get("estado"), fecha(r.get("cerrado")), r.get("descripcion")]
           for r in regs if r.get("tipo") == "falla"])
     hoja("Cambios de aceite", ["Fecha", "Patente", "Odómetro (km)", "Responsable", "Aceite", "Litros", *[l for _, l in FILTROS], "Próximo cambio (km)", "Costo CLP", "Observaciones"],
          [[*base(r), r.get("responsable"), r.get("tipoAceite"), r.get("litros"), *[sn(r.get(k)) for k, _ in FILTROS], r.get("proximoKm"), r.get("costo"), r.get("descripcion")]
