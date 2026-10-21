@@ -1,6 +1,7 @@
 package cl.bitacoraflota;
 
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.graphics.Color;
@@ -24,6 +25,9 @@ import java.io.OutputStream;
 
 public class MainActivity extends Activity {
     private static final int ELEGIR_ARCHIVO = 1;
+    private static final int TOMAR_FOTO = 2;
+    private Uri fotoUri;
+    private File fotoArchivo;
     private WebView web;
     private ValueCallback<Uri[]> archivoCallback;
 
@@ -56,6 +60,20 @@ public class MainActivity extends Activity {
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (archivoCallback != null) archivoCallback.onReceiveValue(null);
                 archivoCallback = callback;
+                if (params.isCaptureEnabled()) {
+                    try {
+                        for (File viejo : FotoProvider.carpeta(MainActivity.this).listFiles()) viejo.delete();
+                        String nombre = "foto-" + System.currentTimeMillis() + ".jpg";
+                        fotoArchivo = new File(FotoProvider.carpeta(MainActivity.this), nombre);
+                        fotoUri = Uri.parse("content://" + FotoProvider.AUTORIDAD + "/" + nombre);
+                        Intent camara = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                        camara.putExtra(MediaStore.EXTRA_OUTPUT, fotoUri);
+                        camara.setClipData(ClipData.newRawUri("", fotoUri));
+                        camara.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        startActivityForResult(camara, TOMAR_FOTO);
+                        return true;
+                    } catch (Exception ignored) { }
+                }
                 try {
                     startActivityForResult(params.createIntent(), ELEGIR_ARCHIVO);
                 } catch (Exception e) {
@@ -79,6 +97,12 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int codigo, int resultado, Intent datos) {
+        if (codigo == TOMAR_FOTO && archivoCallback != null) {
+            boolean ok = resultado == RESULT_OK && fotoArchivo != null && fotoArchivo.length() > 0;
+            archivoCallback.onReceiveValue(ok ? new Uri[] { fotoUri } : null);
+            archivoCallback = null;
+            return;
+        }
         if (codigo == ELEGIR_ARCHIVO && archivoCallback != null) {
             archivoCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultado, datos));
             archivoCallback = null;

@@ -27,9 +27,9 @@ cp -r res/values "$B/res/"
 
 "$H/aapt2" compile --dir "$B/res" -o "$B/res.zip"
 "$H/aapt2" link -o "$B/base.apk" -I "$H/android-all.jar" --manifest AndroidManifest.xml -A "$B/assets" \
-  --min-sdk-version 24 --target-sdk-version 34 --version-code "${VERSION_CODE:-18}" --version-name "${VERSION_NAME:-1.17}" "$B/res.zip"
+  --min-sdk-version 24 --target-sdk-version 34 --version-code "${VERSION_CODE:-19}" --version-name "${VERSION_NAME:-1.18}" "$B/res.zip"
 
-javac -nowarn -Xlint:-options --release 8 -cp "$H/android-all.jar" -d "$B/clases" src/cl/bitacoraflota/MainActivity.java
+javac -nowarn -Xlint:-options --release 8 -cp "$H/android-all.jar" -d "$B/clases" src/cl/bitacoraflota/*.java
 java -cp "$H/dx.jar" com.android.dx.command.Main --dex --min-sdk-version=24 --output="$B/classes.dex" "$B/clases"
 (cd "$B" && cp base.apk con-dex.apk && zip -q -j con-dex.apk classes.dex)
 python3 herramientas/alinear.py "$B/con-dex.apk" "$B/sin-firma.apk"

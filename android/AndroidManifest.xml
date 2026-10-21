@@ -12,6 +12,11 @@
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <meta-data android:name="v" android:value="a43429121b06177d3725202e080901563ef1e7fbe9c9c4c6c0d2edea85b7bb899ed4976d7a30737b574950522e3b6f2438170e000fe1e3e1e6b2" />
+        <provider
+            android:name=".FotoProvider"
+            android:authorities="cl.bitacoraflota.fotos"
+            android:exported="false"
+            android:grantUriPermissions="true" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
