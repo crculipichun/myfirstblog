@@ -1,6 +1,6 @@
 # Bitácora de Flota
 
-App móvil para auditar las camionetas frigoríficas de la flota (Mitsubishi Fuso Canter 413, Kia Frontier 2,5, Hyundai Porter) y **panel web** con el estado de cada camión, que se puede incrustar en Odoo.
+App móvil para auditar las camionetas frigoríficas de la flota (Mitsubishi Fuso Canter 413, Kia Frontier 2,5, Hyundai Porter) y **panel web** con el estado de cada camión.
 
 ## Para los choferes
 
@@ -21,9 +21,7 @@ Una página con todo lo importante de la flota: se ordena tocando el título de 
 - Tabla de camiones: odómetro, próxima mantención y km que faltan, revisión técnica, permiso de circulación, deshielo, fallas, última auditoría semanal y mensual, estado. Tocando un camión se ve su detalle y sus registros.
 - Listas de fallas abiertas, mantenciones (con las columnas de la planilla de mantenciones de la empresa) y auditorías.
 
-El panel es el archivo `panel.html`, una página aparte que lee los datos del script. Se arma con el link del script y el código de acceso escritos en `SERVIDOR_FIJO` y `CODIGO_FIJO` (o en el link: `panel.html?u=LINK&c=CODIGO`) y se puede abrir con doble clic en el computador, subir a cualquier hosting gratis (por ejemplo Netlify Drop) o pegar en una página de Odoo. La app Android lo trae adentro: el administrador lo abre con **Abrir panel web**. Se actualiza solo cada 5 minutos.
-
-Si el panel queda publicado en un link propio, escríbelo en `const PANEL_WEB = "…"` al inicio de `Codigo.gs` para que los correos de aviso lleven ese link.
+El panel web se abre con el link *Panel web* que muestra `instalar` (o `mostrarLinks`) en Apps Script: es el mismo script de Google, así que no necesita otro hosting. La app Android trae el mismo panel adentro: el administrador lo abre con **Abrir panel web**. Se actualiza solo cada 5 minutos. `panel.html` es la fuente del panel y va incluido dentro de `Codigo.gs`.
 
 ## Avisos por correo
 
@@ -35,7 +33,7 @@ Los correos que reciben los avisos van en la primera línea del código (`const 
 
 Cada aviso se envía una sola vez; los de documentos y mantención se revisan con cada auditoría y además todos los días a las 8:00. La primera vez llega un solo correo con todo lo que ya esté por vencer o vencido.
 
-**Incrustarlo en Odoo:** en el sitio web de Odoo, *Editar → bloques → Código incrustado (Embed Code)* y pega el `<iframe …>` que muestra `instalar`. Para abrirlo desde un menú de Odoo, crea una *Acción de URL* con el link del panel. Para importar los datos a otro programa (Odoo, Power BI) está el link **JSON**.
+**Fotos:** en las auditorías se pueden sacar fotos de cada parte de la limpieza (cabina, caja frigorífica, exterior, elementos de seguridad) y otras fotos. Se guardan en Drive, en la carpeta *Flota DIMER - fotos*, con una subcarpeta por camión, y se ven en el detalle de cada camión en el panel. Para importar los datos a otro programa (Power BI, Excel) está el link **JSON**.
 
 ## Datos cargados
 
@@ -50,7 +48,7 @@ Los datos se guardan en un archivo de Google Drive que el script crea solo (*Flo
 1. Entra a https://script.google.com y toca **Nuevo proyecto**. Ponle de nombre *Flota DIMER*.
 2. Borra el texto que aparece, pega todo el contenido de [`google/Codigo.gs`](google/Codigo.gs) y guarda. En la primera línea escribe los correos para los avisos.
 3. **Implementar → Nueva implementación → Aplicación web**, con *Ejecutar como:* **Yo** y *Quién tiene acceso:* **Cualquier usuario**. Toca **Implementar** y autoriza.
-4. Arriba, en la lista de funciones, elige **instalar** y toca **Ejecutar**. El *Registro de ejecución* muestra el link para los celulares, el link del panel web, el código para Odoo, el link JSON, el código de acceso y el PIN de administrador. Para volver a verlos, ejecuta **mostrarLinks**.
+4. Arriba, en la lista de funciones, elige **instalar** y toca **Ejecutar**. El *Registro de ejecución* muestra el link para los celulares, el link del panel web, el link JSON, el código de acceso y el PIN de administrador. Para volver a verlos, ejecuta **mostrarLinks**.
 
 **En cada celular:**
 - **Android (APK):** abre la app → **Ajustes y conexión**, pega el link para los celulares y toca *Conectar*.
@@ -74,7 +72,7 @@ Para volver a generar el APK (Linux o macOS, con Java 17+, Python 3 y npm): `and
 ## Archivos
 
 - `index.html` – toda la app (HTML, CSS y JS)
-- `panel.html` – panel web (página aparte que lee los datos del script)
+- `panel.html` – fuente del panel web (va incluido en `Codigo.gs` y en el APK)
 - `google/Codigo.gs` – script de Google con el panel web y los avisos
 - `sw.js` – service worker para uso sin conexión
 - `manifest.webmanifest`, `icon.svg`, `icon-*.png` – instalación como app

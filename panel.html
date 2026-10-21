@@ -235,9 +235,10 @@ function camiones() {
 function galeria(c) {
   const f = c.fotos || [];
   if (!f.length) return `<div class="galeria"><b>Fotos</b><span class="muted">Todavía no hay fotos de este camión. Se agregan desde las auditorías de la app.</span></div>`;
-  return `<div class="galeria"><b>Fotos (${f.length})</b><div class="g-fotos">${f.map(x => `<a href="https://drive.google.com/file/d/${encodeURIComponent(x.id)}/view" target="_blank" rel="noopener" title="${esc(fF(x.fecha) + " · " + x.tipo)}">
+  const grupo = (titulo, l) => !l.length ? "" : `<div class="galeria"><b>${titulo} (${l.length})</b><div class="g-fotos">${l.map(x => `<a href="https://drive.google.com/file/d/${encodeURIComponent(x.id)}/view" target="_blank" rel="noopener" title="${esc(fF(x.fecha) + " · " + (x.area || x.tipo))}">
     <img loading="lazy" src="https://drive.google.com/thumbnail?id=${encodeURIComponent(x.id)}&sz=w400" alt="Foto del ${esc(fF(x.fecha))}" onerror="this.replaceWith(Object.assign(document.createElement('i'),{textContent:'Ver foto'}))">
-    <span>${esc(fF(x.fecha))}${x.tipo ? " · " + esc(x.tipo.replace("Auditoría ", "")) : ""}</span></a>`).join("")}</div></div>`;
+    <span>${esc(fF(x.fecha))} · ${esc(x.area || (x.tipo || "").replace("Auditoría ", ""))}</span></a>`).join("")}</div></div>`;
+  return grupo("Fotos de limpieza", f.filter(x => x.area)) + grupo("Otras fotos", f.filter(x => !x.area));
 }
 
 function detalle() {

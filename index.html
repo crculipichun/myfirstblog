@@ -188,6 +188,8 @@ form { display: grid; gap: 16px; }
 .foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .foto button { position: absolute; top: 4px; right: 4px; width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 14px; cursor: pointer; }
 label.btn { cursor: pointer; }
+.foto-btn { justify-self: start; color: var(--info); }
+.field .fotos { margin-top: 2px; }
 .checks { display: flex; flex-wrap: wrap; gap: 8px; }
 .check { display: inline-flex; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; min-height: 44px; }
 .check input { width: 20px; height: 20px; accent-color: var(--accent); }
@@ -344,6 +346,7 @@ const PAQUETES = {
 const codigoPaquete = nombre => { const m = /^(Preventivo|Correctivo) (\d+)/.exec(nombre || ""); return m ? m[1][0] + m[2] : ""; };
 const nombrePaquete = k => (k[0] === "C" ? "Correctivo " : "Preventivo ") + (k.slice(1) === "99" ? "(otro)" : k.slice(1));
 const TALLERES = ["Juan Nuñez", "RECC (Rodrigo Caro)", "Kaufmann", "Otro"];
+const MAX_FOTOS = 12;
 const LIMPIEZA = [["cabina", "Cabina (orden y limpieza)"], ["caja", "Caja frigorífica"], ["exterior", "Exterior y carrocería"], ["seguridad", "Extintor, triángulos y botiquín"]];
 const TIPOS_CAMION = ["Camioneta frigorífica", "Camión frigorífico", "Tracto camión", "Camión rígido", "Camión tolva", "Camión aljibe", "Camión pluma", "Furgón", "Semirremolque / rampla", "Otro"];
 const DOCS = [["vRevision", "Revisión técnica"], ["vPermiso", "Permiso de circulación"], ["vSoap", "SOAP"], ["vExtintor", "Extintor"]];
@@ -1147,8 +1150,13 @@ function formChofer(c, ch) {
       <button type="button" class="btn" data-act="lista-agregar" data-lista="fallas">+ Agregar otra falla</button>
       <div class="field"><span>¿La camioneta puede seguir trabajando?</span>${opciones("opera", [["si", "Sí"], ["no", "No", "o-bad"]], v.opera)}</div>
     </div>` : ""}`;
-  const limpieza = `<div class="fieldset" style="gap:14px"><b>Orden y limpieza</b>
-    ${LIMPIEZA.map(([k, l]) => `<div class="field"><span>${l}</span>${opciones("limp." + k, [["Bien", "Bien", "o-ok"], ["Regular", "Regular", "o-warn"], ["Mal", "Mal", "o-bad"]], (v.limp || {})[k])}</div>`).join("")}</div>`;
+  const todas = v.fotos || [], hayLugar = todas.length < MAX_FOTOS;
+  const icoCam = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
+  const miniaturas = area => { const l = todas.map((f, i) => [f, i]).filter(([f]) => (f.area || "") === area);
+    return l.length ? `<div class="fotos">${l.map(([f, i]) => `<div class="foto"><img src="${f.data}" alt="Foto ${i + 1}"><button type="button" data-act="foto-quitar" data-i="${i}" aria-label="Quitar foto">✕</button></div>`).join("")}</div>` : ""; };
+  const limpieza = `<div class="fieldset" style="gap:14px"><b>Orden y limpieza</b><span class="small muted">Saca una foto de cada parte para dejar registro de cómo está el camión.</span>
+    ${LIMPIEZA.map(([k, l]) => `<div class="field"><span>${l}</span>${opciones("limp." + k, [["Bien", "Bien", "o-ok"], ["Regular", "Regular", "o-warn"], ["Mal", "Mal", "o-bad"]], (v.limp || {})[k])}
+      ${miniaturas(k)}${hayLugar ? `<label class="btn sm foto-btn"><input type="file" accept="image/*" capture="environment" data-foto data-area="${k}" hidden>${icoCam}Foto de ${esc(l.split(" (")[0].toLowerCase())}</label>` : ""}</div>`).join("")}</div>`;
   const docs = `<div class="fieldset" style="gap:14px"><b>Documentos</b><span class="small muted">Revisa las fechas de vencimiento. Si se renovó alguno, cambia la fecha.</span>
     <label class="field"><span>Revisión técnica vence</span><input type="date" data-k="vRevision" value="${esc(v.vRevision || "")}"></label>
     <label class="field"><span>Permiso de circulación vence</span><input type="date" data-k="vPermiso" value="${esc(v.vPermiso || "")}"></label></div>`;
@@ -1166,14 +1174,14 @@ function formChofer(c, ch) {
       </div>`).join("")}
       <button type="button" class="btn" data-act="lista-agregar" data-lista="mants">+ Agregar otra mantención</button>
     </div>` : ""}`;
-  const nf = (v.fotos || []).length;
-  const fotos = `<div class="fieldset" style="gap:12px"><b>Fotos ${nf ? `(${nf})` : "(opcional)"}</b>
-    ${nf ? `<div class="fotos">${v.fotos.map((f, i) => `<div class="foto"><img src="${f.data}" alt="Foto ${i + 1}"><button type="button" data-act="foto-quitar" data-i="${i}" aria-label="Quitar foto ${i + 1}">✕</button></div>`).join("")}</div>` : ""}
-    ${nf < 8 ? `<div class="grid2">
+  const nf = todas.filter(f => !f.area).length;
+  const fotos = `<div class="fieldset" style="gap:12px"><b>${mensual ? "Fotos" : "Otras fotos"} ${nf ? `(${nf})` : "(opcional)"}</b>
+    ${miniaturas("")}
+    ${hayLugar ? `<div class="grid2">
       <label class="btn"><input type="file" accept="image/*" capture="environment" data-foto hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Tomar foto</label>
       <label class="btn"><input type="file" accept="image/*" multiple data-foto hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>Galería</label>
     </div>` : ""}
-    <span class="small muted">Hasta 8 fotos. Quedan guardadas en el camión y se envían solas cuando hay señal.</span></div>`;
+    <span class="small muted">Hasta ${MAX_FOTOS} fotos por auditoría. Quedan guardadas en el camión y se envían solas cuando hay señal.</span></div>`;
   return `<section><span class="eyebrow">${mensual ? "Auditoría mensual" : "Auditoría semanal"}</span></section>
   <form id="f-chofer" class="panel" style="padding:16px;gap:20px" novalidate>
     ${campo("km", "Odómetro (km)", `type="number" inputmode="numeric" min="0" placeholder="${esc(kmDe(c) ?? "Ej. 45210")}"`)}
@@ -1231,7 +1239,7 @@ async function enviarChofer(e) {
       taller: m.taller || "", tipoMant: m.paquete[0] === "C" ? "Correctivo" : "Preventivo", paquete: nombrePaquete(m.paquete), servicio: PAQUETES[m.paquete] || "",
       descripcion: String(m.obs || "").trim(), estado: "Cerrado", auditoriaId: r.id, origen });
   } catch { return; }
-  for (const f of v.fotos || []) await FotosDB.poner({ id: f.id, camionId: c.id, registroId: r.id, fecha: r.fecha, tipo: ch.tipo, data: f.data });
+  for (const f of v.fotos || []) await FotosDB.poner({ id: f.id, camionId: c.id, registroId: r.id, fecha: r.fecha, tipo: ch.tipo, area: f.area || "", data: f.data });
   if ((v.fotos || []).length) { Store.fotosPend += v.fotos.length; Store.badge(); Store.subirFotos(); }
   UI.chofer = { enviado: { camionId: c.id, tipo: ch.tipo, fallas: fallas.length, mants: mants.length, fotos: (v.fotos || []).length } }; $("#app").innerHTML = ""; render(); window.scrollTo(0, 0);
 }
@@ -1383,11 +1391,11 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("change", async e => {
   if (!e.target.matches("[data-foto]")) return;
-  const ch = leerChofer(), archivos = [...e.target.files]; e.target.value = "";
+  const ch = leerChofer(), archivos = [...e.target.files], area = e.target.dataset.area || ""; e.target.value = "";
   ch.v.fotos = ch.v.fotos || [];
   for (const a of archivos) {
-    if (ch.v.fotos.length >= 8) { toast("Máximo 8 fotos por auditoría."); break; }
-    try { ch.v.fotos.push({ id: uid(), data: await comprimirFoto(a) }); } catch { toast("No se pudo leer la foto."); }
+    if (ch.v.fotos.length >= MAX_FOTOS) { toast("Máximo " + MAX_FOTOS + " fotos por auditoría."); break; }
+    try { ch.v.fotos.push({ id: uid(), area, data: await comprimirFoto(a) }); } catch { toast("No se pudo leer la foto."); }
   }
   redibujarChofer();
 });
