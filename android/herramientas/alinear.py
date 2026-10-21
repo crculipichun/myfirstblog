@@ -1,4 +1,3 @@
-"""Alinea a 4 bytes los archivos sin comprimir del APK (como zipalign). Uso: alinear.py entrada.apk salida.apk"""
 import sys
 import zipfile
 

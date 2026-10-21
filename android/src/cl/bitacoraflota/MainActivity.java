@@ -22,7 +22,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 
-/** Abre Bitácora de Flota (assets/www/index.html) a pantalla completa. */
 public class MainActivity extends Activity {
     private static final int ELEGIR_ARCHIVO = 1;
     private WebView web;
@@ -98,7 +97,6 @@ public class MainActivity extends Activity {
         });
     }
 
-    /** Funciones que la página llama como window.AndroidApp.* */
     private class Puente {
         @JavascriptInterface
         public String guardarArchivo(String nombre, String base64) {

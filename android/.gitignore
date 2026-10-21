@@ -1,5 +1,4 @@
 .herramientas/
 .construccion/
 *.apk
-# La llave de firma no se sube: guárdala en un lugar seguro para poder publicar actualizaciones
 firma-bitacora.p12

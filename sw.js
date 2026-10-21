@@ -1,13 +1,11 @@
-// Guarda la app en el teléfono para que funcione sin señal (faenas, rutas, talleres).
-const CACHE = "bitacora-flota-v2";
+const CACHE = "bitacora-flota-v3";
 const ARCHIVOS = [
   "./",
   "index.html",
   "manifest.webmanifest",
   "icon.svg",
   "icon-192.png",
-  "icon-512.png",
-  "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+  "icon-512.png"
 ];
 
 self.addEventListener("install", e => {
@@ -18,7 +16,6 @@ self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
-// Red primero para la app (para recibir actualizaciones), caché si no hay señal.
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET" || new URL(e.request.url).pathname.includes("/api/")) return;
   e.respondWith(

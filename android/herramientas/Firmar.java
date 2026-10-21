@@ -7,7 +7,6 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
 
-/** Firma el APK (esquema v2, válido desde Android 7). Uso: Firmar entrada.apk salida.apk llavero.p12 clave alias */
 public class Firmar {
     public static void main(String[] a) throws Exception {
         KeyStore ks = KeyStore.getInstance("PKCS12");
