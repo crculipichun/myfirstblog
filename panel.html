@@ -322,7 +322,7 @@ async function actualizar() {
       .datosPanel(CODIGO);
     return;
   }
-  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(SERVIDOR) || !CODIGO) { aviso("Falta el link del script y el código de acceso: escríbelos en SERVIDOR_FIJO y CODIGO_FIJO dentro de este archivo."); return; }
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(SERVIDOR) || !CODIGO) { aviso("Esta copia del panel no sabe a qué script conectarse. Abre el panel con el link «Panel web» que aparece al ejecutar mostrarLinks en Apps Script."); return; }
   $("#btn-act").textContent = "Actualizando…";
   try {
     const base = SERVIDOR + "?vista=json&c=" + encodeURIComponent(CODIGO);
