@@ -1,28 +1,33 @@
 # Bitácora de Flota
 
-App móvil para auditar las camionetas frigoríficas de la flota (Mitsubishi Fuso Canter 413, Kia Frontier 2,5, Hyundai Porter).
+App móvil para auditar las camionetas frigoríficas de la flota (Mitsubishi Fuso Canter 413, Kia Frontier 2,5, Hyundai Porter) y **panel web** con el estado de cada camión, que se puede incrustar en Odoo.
 
-**Para los choferes es una sola pantalla:** eligen el camión (por N° o patente) y completan 4 datos:
-1. Odómetro (km)
-2. Próxima mantención (km), que viene precargada con la última informada
-3. Responsable de la auditoría (el celular lo recuerda)
-4. ¿Necesita deshielo? Sí / No
-5. ¿Tiene fallas? Si dice Sí, elige qué falla (equipo de frío, motor, frenos, neumáticos, luces, etc.), la describe y responde si la camioneta puede seguir trabajando. Puede reportar varias fallas.
+## Para los choferes
 
-Toca **Enviar auditoría** y llega a la **planilla de Google Drive**. Cada falla queda además en la hoja *Fallas*, en estado Pendiente, para seguirla hasta que se repare. Si la camioneta no puede seguir trabajando, queda marcada como *Detenida*.
+Eligen el camión (por N°, patente o código anterior como "B1") y el tipo de auditoría:
 
-**El administrador** (con PIN) ve además el panel completo, con avisos de deshielo pendiente y de mantención a 1.000 km o atrasada, y puede registrar:
-- **Mantenciones preventivas** (servicio, repuestos, próximo km y próxima fecha).
-- **Mantenciones correctivas** (sistema, causa, repuestos, horas de taller, taller, costo).
-- **Fallas** (sistema, severidad, camión detenido, estado Pendiente / En proceso / Cerrado).
-- **Cambios de aceite** (tipo, litros, filtros, próximo cambio calculado con el intervalo de cada camión).
-- **Lecturas de odómetro y horómetro**, desde la ficha del camión con un solo botón.
+**Auditoría semanal**: odómetro, responsable, orden y limpieza (cabina, caja frigorífica, exterior, extintor/triángulos/botiquín: Bien / Regular / Mal), fallas y observaciones.
 
-Cada camión tiene su **ficha**: patente, N° interno, tipo, marca, modelo, año, color, VIN / N° chasis, N° motor, odómetro, horómetro, intervalo de aceite, estanque, medida de neumáticos, conductor, faena y vencimientos de revisión técnica, permiso de circulación, SOAP y extintor (con aviso 30 días antes).
+**Auditoría mensual**: odómetro, próxima mantención (km), responsable, ¿necesita deshielo?, fallas, **documentos** (vencimiento de revisión técnica y permiso de circulación, precargados para confirmar o actualizar) y **mantenciones hechas** desde la última auditoría (paquete de mantenimiento, taller, fechas de entrada y salida, km y qué se hizo).
 
-La flota de la empresa (N° 1 al 17 y 815) viene cargada desde el inicio. **Solo el administrador** puede agregar, editar o borrar camiones; los choferes solo ven la pantalla de auditoría.
+Si reportan una falla, eligen qué falla, la describen y dicen si la camioneta puede seguir trabajando (si no, queda *Detenida*). Cada falla y cada mantención quedan como registros propios.
 
-La pantalla de inicio del administrador avisa qué requiere atención: deshielo pendiente (con botón *Hecho*), mantención próxima o atrasada, aceite por vencer, fallas abiertas, camiones detenidos y camiones sin auditoría en 30 días.
+## Panel web
+
+Una página con todo lo importante de la flota, sin abrir el Excel:
+- Resumen: operativos, detenidos, fallas abiertas, deshielo pendiente, mantención próxima, documentos vencidos y cuántos camiones tienen la auditoría semanal y mensual al día.
+- Tabla de camiones: odómetro, próxima mantención y km que faltan, revisión técnica, permiso de circulación, deshielo, fallas, última auditoría semanal y mensual, estado. Tocando un camión se ve su detalle y sus registros.
+- Listas de fallas abiertas, mantenciones (con las columnas de la planilla de mantenciones de la empresa) y auditorías.
+
+El link del panel está en la hoja **Configuración** de la planilla. Se actualiza solo cada 5 minutos.
+
+**Incrustarlo en Odoo:** en el sitio web de Odoo, *Editar → bloques → Código incrustado (Embed Code)* y pega el `<iframe …>` de la hoja Configuración. Para abrirlo desde un menú de Odoo, crea una *Acción de URL* con el link del panel. Para importar los datos a otro programa (Odoo, Power BI) está el link **JSON** de la misma hoja.
+
+## Datos cargados
+
+La flota usa los N° de la lista de choferes. De la planilla *Estado de Flota* se cargaron, por patente: revisión técnica (fecha y vencimiento), permiso de circulación (pago y vencimiento), el código anterior (B1, B2…) y 81 mantenciones históricas. Los camiones en rojo (LRTF81, LRTF82, HLYG99, LPKF88) están de baja y no se cargaron.
+
+**El administrador** (con PIN) ve además el panel completo de la app, con avisos de deshielo pendiente, mantención a 1.000 km o atrasada y documentos por vencer, y puede agregar o editar camiones y registrar mantenciones, fallas, cambios de aceite y lecturas de odómetro.
 
 ## Planilla en Google Drive (recomendado)
 
@@ -52,7 +57,8 @@ Los celulares envían las auditorías directo a una planilla de Google Sheets en
 - Las hojas visibles se vuelven a armar con cada envío. Corrige los datos desde la app: los cambios hechos a mano en esas hojas se pierden. Los datos originales están en la hoja oculta `_datos`; no la borres.
 - Para abrirla en Excel: **Archivo → Descargar → Microsoft Excel (.xlsx)**.
 - Para cambiar el código de acceso o el PIN: en Apps Script, **Configuración del proyecto → Propiedades del script**, edita `CODIGO` o `PIN` y vuelve a usar **Bitácora → Instalar o actualizar**.
-- Si cambias el código de `Codigo.gs`: **Implementar → Administrar implementaciones → editar (lápiz) → Versión: Nueva versión**, para que el link siga siendo el mismo.
+- **Para instalar una versión nueva de `Codigo.gs`:** pégala completa en Apps Script, guarda, y en **Implementar → Administrar implementaciones → editar (lápiz) → Versión: Nueva versión → Implementar** (el link no cambia). Después **Bitácora → Instalar o actualizar**.
+- `google/Codigo.gs` se arma con `python3 google/armar.py` desde `google/fuente/` (plantilla, panel web e historial). No lo edites a mano.
 
 ## Alternativa: planilla en un computador
 
@@ -61,20 +67,19 @@ Si prefieres que la planilla sea un archivo Excel en un computador, usa el progr
 2. En la carpeta `servidor` abre **`Iniciar Bitacora.bat`**. La ventana muestra el link para los celulares, el código de acceso y el PIN. La planilla queda en `Documentos\Bitacora Flota\Bitacora_Flota.xlsx`.
 3. Para recibir datos fuera del Wi-Fi de la oficina se usa ngrok (gratis): abre **`Configurar internet.bat`** y pega tu Authtoken y tu dominio de https://dashboard.ngrok.com.
 
-El computador tiene que estar encendido con el programa abierto, y la planilla no se actualiza mientras esté abierta en Excel.
+El computador tiene que estar encendido con el programa abierto, y la planilla no se actualiza mientras esté abierta en Excel. Esta alternativa no tiene el panel web ni las hojas de auditorías semanales y mantenciones.
 
-### Hojas de la planilla (iguales en Google y en el computador)
+### Hojas de la planilla de Google
 
 | Hoja | Contenido |
 |---|---|
-| Flota | Un camión por fila: N°, patente, modelo, odómetro, próxima mantención, km que faltan, si necesita deshielo, última auditoría y su responsable; luego la ficha completa |
-| Auditorías | Fecha, N°, patente, vehículo, odómetro, próxima mantención, km que faltan, responsable, necesita deshielo, fecha en que se hizo y fallas reportadas |
-| Preventivas | Servicio, repuestos, próximo km/fecha, costo |
-| Correctivas | Sistema, causa, repuestos, horas, taller, costo, fecha de cierre |
-| Fallas | Cada falla, venga de una auditoría o del administrador: sistema, descripción, si el camión quedó detenido, estado y fecha de cierre |
-| Cambios de aceite | Aceite, litros, filtros cambiados, próximo cambio |
-| Odómetro | Historial de lecturas de odómetro y horómetro |
-| Todos los registros | Todo junto, ordenado por fecha |
+| Flota | Un camión por fila: N°, patente, modelo, odómetro, próxima mantención y km que faltan, deshielo, vencimientos de revisión técnica y permiso, últimas auditorías, fallas abiertas, estado y la ficha completa |
+| Documentos | Revisión técnica y permiso de circulación de cada camión: fecha, vencimiento, estado y días que faltan |
+| Auditorías semanales | Odómetro, responsable, orden y limpieza punto por punto, fallas |
+| Auditorías mensuales | Odómetro, próxima mantención, deshielo, vencimientos informados, mantenciones informadas, fallas |
+| Mantenciones | Las mismas columnas de la planilla de mantenciones de la empresa: taller, fechas, tipo, km, paquete, servicio, causas y observaciones |
+| Fallas | Cada falla: sistema, descripción, si el camión quedó detenido, estado y de dónde vino |
+| Cambios de aceite, Odómetro, Todos los registros | Lo que registra el administrador |
 
 ## App Android (APK)
 
@@ -98,7 +103,7 @@ También se puede publicar con GitHub Pages (*Settings → Pages → Deploy from
 ## Archivos
 
 - `index.html` – toda la app (HTML, CSS y JS)
-- `google/Codigo.gs` – script para la planilla de Google Drive
+- `google/Codigo.gs` – script para la planilla de Google Drive y el panel web (generado por `google/armar.py` desde `google/fuente/`)
 - `sw.js` – service worker para uso sin conexión
 - `manifest.webmanifest`, `icon.svg`, `icon-*.png` – instalación como app
 - `servidor/servidor.py` – programa del computador: entrega la app a los celulares y escribe la planilla Excel

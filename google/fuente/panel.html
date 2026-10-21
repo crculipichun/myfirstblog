@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Panel de Flota</title>
+<style>
+/* Panel para mirar la flota de un vistazo (también dentro de Odoo): resumen arriba, tabla de camiones, detalle y listas abajo. */
+:root {
+  --bg: #eef1f4; --surface: #ffffff; --surface-2: #f5f7f9; --ink: #16202b; --muted: #5a6776; --line: #d6dde4;
+  --accent: #f2a900; --accent-ink: #1d1500; --bar: #16202b; --bar-ink: #e9eef3;
+  --ok: #1d7f47; --ok-bg: #e2f3e9; --warn: #9a5c00; --warn-bg: #fdf0d6; --bad: #b8282a; --bad-bg: #fbe3e2; --info: #2b5c8f; --info-bg: #e2ecf6;
+  --f-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --f-cond: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0e141b; --surface: #17202a; --surface-2: #1d2833; --ink: #e6ecf2; --muted: #95a3b3; --line: #2a3643; --accent: #ffb81c; --bar: #0a0f15;
+    --ok: #4cc785; --ok-bg: #12301f; --warn: #f2ab45; --warn-bg: #352610; --bad: #f2716d; --bad-bg: #3a1716; --info: #7db3ea; --info-bg: #142a40; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 14px/1.45 var(--f-body); }
+header { background: var(--bar); color: var(--bar-ink); padding: 14px max(16px, env(safe-area-inset-left, 0px)); }
+.wrap { max-width: 1400px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header .wrap { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 0; }
+h1 { margin: 0; font: 700 22px/1 var(--f-cond); letter-spacing: .03em; text-transform: uppercase; }
+.sub { color: #93a1b1; font-size: 13px; }
+.sp { flex: 1; }
+button { font: inherit; color: inherit; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 14px; font-weight: 600; cursor: pointer; }
+header .btn { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+main { padding-block: 18px 40px; display: grid; gap: 20px; }
+h2 { margin: 0; font: 700 18px/1.1 var(--f-cond); text-transform: uppercase; letter-spacing: .05em; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 4px; }
+.kpi b { font: 700 28px/1 var(--f-cond); font-variant-numeric: tabular-nums; }
+.kpi span { color: var(--muted); font-size: 12.5px; line-height: 1.25; }
+.kpi.bad b { color: var(--bad); } .kpi.warn b { color: var(--warn); } .kpi.ok b { color: var(--ok); }
+.tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.tools input { flex: 1 1 220px; min-height: 38px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 7px 12px; font-weight: 600; font-size: 13px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; padding: 10px; border-bottom: 1px solid var(--line); white-space: nowrap; position: sticky; top: 0; background: var(--surface); }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+tbody tr.fila { cursor: pointer; } tbody tr.fila:hover { background: var(--surface-2); }
+tbody tr.sel { background: var(--info-bg); }
+.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.r { text-align: right; }
+.n { font: 700 16px/1 var(--f-cond); }
+.plate { display: inline-block; background: #fff; color: #111; border: 2px solid #111; border-radius: 4px; padding: 1px 6px; font: 700 12.5px/1.2 var(--f-mono); letter-spacing: .05em; white-space: nowrap; }
+.pill { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap; background: var(--surface-2); color: var(--muted); }
+.pill.ok { background: var(--ok-bg); color: var(--ok); } .pill.warn { background: var(--warn-bg); color: var(--warn); } .pill.bad { background: var(--bad-bg); color: var(--bad); } .pill.info { background: var(--info-bg); color: var(--info); }
+.muted { color: var(--muted); } .small { font-size: 12px; }
+.det { padding: 16px; display: grid; gap: 14px; }
+.det-top { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.det-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.det-grid div { background: var(--surface-2); border-radius: 8px; padding: 10px; }
+.det-grid b { display: block; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 2px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.vacio { padding: 18px; color: var(--muted); }
+.err { background: var(--bad-bg); color: var(--bad); padding: 10px 14px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<header><div class="wrap"><h1>Panel de Flota</h1><span class="sub" id="act"></span><span class="sp"></span><button class="btn" id="btn-act" type="button">Actualizar</button></div></header>
+<main class="wrap">
+  <div id="msg"></div>
+  <section class="kpis" id="kpis"></section>
+  <section style="display:grid;gap:10px">
+    <div class="tools"><h2 style="margin-right:8px">Camiones</h2>
+      <input id="q" type="search" placeholder="Buscar por N° o patente" aria-label="Buscar camión">
+      <span id="chips"></span></div>
+    <div class="card scroll"><table><thead><tr>
+      <th>N°</th><th>Patente</th><th>Vehículo</th><th class="r">Odómetro</th><th class="r">Próx. mantención</th><th class="r">Faltan</th>
+      <th>Rev. técnica</th><th>Permiso circ.</th><th>Deshielo</th><th class="r">Fallas</th><th>Últ. semanal</th><th>Últ. mensual</th><th>Estado</th>
+    </tr></thead><tbody id="flota"></tbody></table></div>
+  </section>
+  <section id="detalle"></section>
+  <section style="display:grid;gap:10px">
+    <div class="tools"><h2 style="margin-right:8px">Registros</h2><span class="tabs" id="tabs"></span><span class="sp"></span><span class="muted small" id="filtro-reg"></span></div>
+    <div class="card scroll" id="lista"></div>
+  </section>
+</main>
+<script>
+"use strict";
+let DATOS = __DATOS__;
+const CODIGO = __CODIGO__;
+const UI = { q: "", estado: "", sel: null, tab: "fallas" };
+const $ = s => document.querySelector(s);
+const esc = v => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const miles = n => n == null || n === "" ? "—" : Number(n).toLocaleString("es-CL");
+const km = n => n == null || n === "" ? "—" : miles(n) + " km";
+const fF = s => s && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10).split("-").reverse().join("-") : (s || "—");
+const pill = (t, nivel) => `<span class="pill ${nivel || ""}">${esc(t)}</span>`;
+const nivelEstado = e => e === "Detenido" ? "bad" : e === "Revisar" ? "warn" : "ok";
+const hace = s => { if (!s) return "—"; const d = Math.round((new Date() - new Date(s + "T00:00:00")) / 864e5); return d <= 0 ? "Hoy" : d === 1 ? "Ayer" : "Hace " + d + " días"; };
+
+function doc(x) {
+  if (!x || !x.vence) return pill("Sin dato", "info");
+  const txt = x.nivel === "bad" ? "Vencido" : x.nivel === "warn" ? "En " + x.dias + " días" : "Vigente";
+  return `<span class="num">${fF(x.vence)}</span><br>${pill(txt, x.nivel)}`;
+}
+
+function kpis() {
+  const k = DATOS.kpi;
+  const t = (v, l, cls) => `<div class="kpi ${cls || ""}"><b>${v}</b><span>${l}</span></div>`;
+  $("#kpis").innerHTML = [
+    t(k.operativos + "/" + k.total, "Operativos", "ok"),
+    t(k.detenidos, "Detenidos", k.detenidos ? "bad" : ""),
+    t(k.fallas, "Fallas abiertas", k.fallas ? "bad" : ""),
+    t(k.deshielo, "Necesitan deshielo", k.deshielo ? "warn" : ""),
+    t(k.mantencion, "Mantención próxima o atrasada", k.mantencion ? "warn" : ""),
+    t(k.docsVencidos, "Documentos vencidos" + (k.docsPorVencer ? " · " + k.docsPorVencer + " vence" + (k.docsPorVencer === 1 ? "" : "n") + " en 30 días" : ""), k.docsVencidos ? "bad" : k.docsPorVencer ? "warn" : ""),
+    t(k.semanalAlDia + "/" + k.total, "Con auditoría semanal (7 días)", k.semanalAlDia < k.total ? "warn" : "ok"),
+    t(k.mensualAlDia + "/" + k.total, "Con auditoría mensual (31 días)", k.mensualAlDia < k.total ? "warn" : "ok")
+  ].join("");
+}
+
+function camionesFiltrados() {
+  const q = UI.q.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return DATOS.camiones.filter(c => (!UI.estado || c.estado === UI.estado) &&
+    (!q || String(c.interno).toUpperCase() === q || c.patente.replace(/[^A-Z0-9]/g, "").includes(q) || String(c.codigoAnterior).toUpperCase() === q));
+}
+
+function flota() {
+  const est = ["", "Detenido", "Revisar", "Operativo"];
+  $("#chips").innerHTML = est.map(e => `<button class="chip" data-estado="${e}" aria-pressed="${UI.estado === e}">${e || "Todos"}${e ? " · " + DATOS.camiones.filter(c => c.estado === e).length : ""}</button>`).join(" ");
+  const cams = camionesFiltrados();
+  $("#flota").innerHTML = cams.length ? cams.map(c => `<tr class="fila ${UI.sel === c.id ? "sel" : ""}" data-id="${esc(c.id)}">
+    <td class="n">${esc(c.interno || "—")}</td><td><span class="plate">${esc(c.patente)}</span></td><td>${esc(c.vehiculo)}<div class="muted small">${esc(c.anio)}${c.codigoAnterior ? " · cód. " + esc(c.codigoAnterior) : ""}</div></td>
+    <td class="r num">${km(c.km)}</td><td class="r num">${km(c.proxMant)}</td>
+    <td class="r">${c.faltaMant == null ? "—" : pill(c.faltaMant <= 0 ? "Atrasada " + miles(-c.faltaMant) : miles(c.faltaMant) + " km", c.mantNivel)}</td>
+    <td>${doc(c.rt)}</td><td>${doc(c.permiso)}</td>
+    <td>${c.ultMensual ? (c.deshielo ? pill("Necesita", "bad") : pill("No", "ok")) : "—"}</td>
+    <td class="r">${c.fallasAbiertas ? pill(c.fallasAbiertas, "bad") : "0"}</td>
+    <td>${c.ultSemanal ? hace(c.ultSemanal.fecha) : pill("Nunca", "warn")}</td><td>${c.ultMensual ? hace(c.ultMensual.fecha) : pill("Nunca", "warn")}</td>
+    <td>${pill(c.estado, nivelEstado(c.estado))}</td></tr>`).join("")
+    : `<tr><td colspan="13" class="vacio">No hay camiones con ese filtro.</td></tr>`;
+}
+
+function detalle() {
+  const c = DATOS.camiones.find(x => x.id === UI.sel);
+  if (!c) { $("#detalle").innerHTML = ""; return; }
+  const s = c.ultSemanal, l = s ? Object.entries(s.limpieza || {}) : [];
+  $("#detalle").innerHTML = `<div class="card det">
+    <div class="det-top"><span class="n" style="font-size:26px">N° ${esc(c.interno || "—")}</span><span class="plate" style="font-size:16px">${esc(c.patente)}</span>
+      <b>${esc(c.vehiculo)}</b><span class="muted">${esc(c.tipo)} ${esc(c.anio)}</span>${pill(c.estado, nivelEstado(c.estado))}<span class="sp"></span><button class="btn" data-cerrar>Cerrar</button></div>
+    <div class="det-grid">
+      <div><b>Odómetro</b><span class="num">${km(c.km)}</span></div>
+      <div><b>Próxima mantención</b><span class="num">${km(c.proxMant)}</span></div>
+      <div><b>Revisión técnica</b>${c.rt.fecha ? "Hecha: " + esc(fF(c.rt.fecha)) + "<br>" : ""}${doc(c.rt)}</div>
+      <div><b>Permiso de circulación</b>${c.permiso.fecha ? "Pagado: " + esc(fF(c.permiso.fecha)) + "<br>" : ""}${doc(c.permiso)}</div>
+      <div><b>Última semanal</b>${s ? esc(fF(s.fecha)) + " · " + esc(s.responsable) + (l.length ? "<br>" + l.map(([k, v]) => esc(k) + ": " + pill(v, v === "Mal" ? "bad" : v === "Regular" ? "warn" : "ok")).join(" ") : "") : "—"}</div>
+      <div><b>Última mensual</b>${c.ultMensual ? esc(fF(c.ultMensual.fecha)) + " · " + esc(c.ultMensual.responsable) : "—"}</div>
+    </div>
+    <span class="muted small">Abajo, los registros quedan filtrados para este camión.</span></div>`;
+}
+
+function lista() {
+  const t = [["fallas", "Fallas abiertas"], ["mantenciones", "Mantenciones"], ["auditorias", "Auditorías"], ["todasFallas", "Todas las fallas"]];
+  $("#tabs").innerHTML = t.map(([k, l]) => `<button class="chip" data-tab="${k}" aria-pressed="${UI.tab === k}">${l}</button>`).join(" ");
+  const sel = DATOS.camiones.find(x => x.id === UI.sel);
+  $("#filtro-reg").innerHTML = sel ? `Solo N° ${esc(sel.interno)} · <button class="chip" data-cerrar>Ver todos</button>` : "";
+  const deCam = r => !UI.sel || r.camionId === UI.sel;
+  const cam = r => `<td class="n">${esc(r.interno || "—")}</td><td><span class="plate">${esc(r.patente)}</span></td>`;
+  let cab, filas;
+  if (UI.tab === "mantenciones") {
+    const ms = DATOS.mantenciones.filter(deCam);
+    cab = "<th>Fecha entrada</th><th>Salida</th><th>N°</th><th>Patente</th><th>Taller</th><th>Tipo</th><th class='r'>Km</th><th>Paquete</th><th>Servicio</th><th>Causas y observaciones</th>";
+    filas = ms.map(m => `<tr><td class="num">${fF(m.fecha)}</td><td class="num">${fF(m.salida)}</td>${cam(m)}<td>${esc(m.taller || "—")}</td><td>${pill(m.tipo, m.tipo === "Correctivo" ? "warn" : "info")}</td><td class="r num">${miles(m.km)}</td><td>${esc(m.paquete)}</td><td>${esc(m.servicio)}</td><td>${esc(m.obs)}</td></tr>`);
+  } else if (UI.tab === "auditorias") {
+    const as = DATOS.auditorias.filter(deCam);
+    cab = "<th>Fecha</th><th>Tipo</th><th>N°</th><th>Patente</th><th class='r'>Odómetro</th><th>Responsable</th><th>Detalle</th><th>Fallas</th>";
+    filas = as.map(a => `<tr><td class="num">${fF(a.fecha)}</td><td>${pill(a.tipo, a.tipo === "Semanal" ? "info" : "")}</td>${cam(a)}<td class="r num">${km(a.km)}</td><td>${esc(a.responsable)}</td><td>${esc(a.detalle)}</td><td>${esc(a.fallasResumen || "—")}</td></tr>`);
+  } else {
+    const fs = DATOS.fallas.filter(f => deCam(f) && (UI.tab === "todasFallas" || f.estado !== "Cerrado"));
+    cab = "<th>Fecha</th><th>N°</th><th>Patente</th><th>Sistema</th><th>Descripción</th><th>Detenido</th><th>Estado</th><th>Origen</th><th>Reportó</th>";
+    filas = fs.map(f => `<tr><td class="num">${fF(f.fecha)}</td>${cam(f)}<td>${esc(f.sistema)}</td><td>${esc(f.descripcion || "—")}</td><td>${f.detenido ? pill("Sí", "bad") : "No"}</td><td>${pill(f.estado, f.estado === "Cerrado" ? "ok" : "warn")}</td><td>${esc(f.origen)}</td><td>${esc(f.responsable)}</td></tr>`);
+  }
+  $("#lista").innerHTML = filas.length ? `<table><thead><tr>${cab}</tr></thead><tbody>${filas.join("")}</tbody></table>` : `<div class="vacio">No hay registros${UI.sel ? " de este camión" : ""} en esta lista.</div>`;
+}
+
+function pintar() {
+  $("#act").textContent = "Actualizado " + DATOS.actualizado.replace(/^(\d{4})-(\d{2})-(\d{2})/, "$3-$2-$1");
+  kpis(); flota(); detalle(); lista();
+}
+
+function actualizar() {
+  if (!(window.google && google.script && google.script.run)) { location.reload(); return; }
+  $("#btn-act").textContent = "Actualizando…";
+  google.script.run
+    .withSuccessHandler(d => { DATOS = d; $("#msg").innerHTML = ""; $("#btn-act").textContent = "Actualizar"; pintar(); })
+    .withFailureHandler(e => { $("#msg").innerHTML = `<div class="err">No se pudo actualizar: ${esc(e && e.message)}</div>`; $("#btn-act").textContent = "Actualizar"; })
+    .datosPanel(CODIGO);
+}
+
+document.addEventListener("click", e => {
+  const f = e.target.closest("tr.fila"); if (f) { UI.sel = UI.sel === f.dataset.id ? null : f.dataset.id; pintar(); if (UI.sel) $("#detalle").scrollIntoView({ behavior: "smooth", block: "nearest" }); return; }
+  const est = e.target.closest("[data-estado]"); if (est) { UI.estado = est.dataset.estado; flota(); return; }
+  const tab = e.target.closest("[data-tab]"); if (tab) { UI.tab = tab.dataset.tab; lista(); return; }
+  if (e.target.closest("[data-cerrar]")) { UI.sel = null; pintar(); return; }
+  if (e.target.closest("#btn-act")) actualizar();
+});
+$("#q").addEventListener("input", e => { UI.q = e.target.value; flota(); });
+pintar();
+setInterval(actualizar, 5 * 60 * 1000);
+</script>
+</body>
+</html>
