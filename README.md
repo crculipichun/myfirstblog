@@ -61,7 +61,6 @@ Los datos se guardan en una planilla de Google Drive que solo sirve de almacenam
 - No borres la hoja oculta `_datos`: ahí están todos los registros.
 - Para cambiar el código de acceso o el PIN: en Apps Script, **Configuración del proyecto → Propiedades del script**, edita `CODIGO` o `PIN`.
 - **Para instalar una versión nueva de `Codigo.gs`:** pégala completa en Apps Script, guarda, y en **Implementar → Administrar implementaciones → lápiz → Versión: Nueva versión → Implementar** (el link no cambia). Después **Bitácora → Instalar o actualizar**.
-- `google/Codigo.gs` se arma con `python3 google/armar.py` desde `google/fuente/`.
 
 ## App Android (APK)
 
@@ -74,7 +73,7 @@ Para volver a generar el APK (Linux o macOS, con Java 17+, Python 3 y npm): `and
 ## Archivos
 
 - `index.html` – toda la app (HTML, CSS y JS)
-- `google/Codigo.gs` – script para la planilla de Google Drive y el panel web (generado por `google/armar.py` desde `google/fuente/`)
+- `google/Codigo.gs` – script para la planilla de Google Drive y el panel web
 - `sw.js` – service worker para uso sin conexión
 - `manifest.webmanifest`, `icon.svg`, `icon-*.png` – instalación como app
 - `android/` – app Android (abre la misma página) y `construir-apk.sh` para generar el APK
