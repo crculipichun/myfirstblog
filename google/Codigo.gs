@@ -121,7 +121,7 @@ const DOCS = [["vRevision", "Revisión técnica", "rtFecha"], ["vPermiso", "Perm
 const LIMPIEZA = [["cabina", "Cabina"], ["caja", "Caja frigorífica"], ["exterior", "Exterior"], ["seguridad", "Elementos de seguridad"]];
 
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu("Bitácora").addItem("Instalar o actualizar", "instalar").addItem("Enviar correo de prueba", "probarCorreo").addToUi();
+  SpreadsheetApp.getUi().createMenu("Bitácora").addItem("Instalar o actualizar", "instalar").addItem("Enviar correo de prueba", "probarCorreo").addItem("Cambiar link de la aplicación web", "cambiarLink").addToUi();
 }
 
 function instalar() {
@@ -179,10 +179,29 @@ function config() {
   return { codigo: p.getProperty("CODIGO"), pin: p.getProperty("PIN") };
 }
 
+function urlPublica() {
+  const propia = PropertiesService.getScriptProperties().getProperty("URL_PUBLICA");
+  const u = (propia || ScriptApp.getService().getUrl() || "").trim();
+  return u.replace(/^https:\/\/script\.google\.com\/a\/macros\/[^/]+\//, "https://script.google.com/macros/").replace(/^https:\/\/script\.google\.com\/a\/[^/]+\/macros\//, "https://script.google.com/macros/").replace(/\/(dev|exec)(\?.*)?$/, "/exec");
+}
+
+function cambiarLink() {
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt("Link de la aplicación web", "Pega el link que termina en /exec (Implementar → Administrar implementaciones). Déjalo vacío para usar el automático.", ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const t = r.getResponseText().trim();
+  const p = PropertiesService.getScriptProperties();
+  if (!t) p.deleteProperty("URL_PUBLICA");
+  else if (/^https:\/\/script\.google\.com\/.*\/s\/[\w-]+\/(exec|dev)/.test(t)) p.setProperty("URL_PUBLICA", t.split("?")[0]);
+  else { ui.alert("Ese link no es de una aplicación web de Apps Script."); return; }
+  escribirConfig(config());
+  ui.alert("Listo. La hoja Configuración usa ahora: " + urlPublica());
+}
+
 function escribirConfig(cfg) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const h = ss.getSheetByName(HOJA_CONFIG) || ss.insertSheet(HOJA_CONFIG);
-  const url = ScriptApp.getService().getUrl();
+  const url = urlPublica();
   const falta = "Primero implementa el script como aplicación web (paso 2) y vuelve a usar Bitácora → Instalar o actualizar.";
   const panel = url ? url + "?vista=panel&c=" + cfg.codigo : falta;
   const previos = textoCorreos();
@@ -223,7 +242,7 @@ const esGrave = r => !!r.detenido || /alta|cr[ií]tica|grave/i.test(r.severidad 
 function enviarCorreo(asunto, filas, intro) {
   const para = correosAvisos();
   if (!para.length) return false;
-  const url = ScriptApp.getService().getUrl();
+  const url = urlPublica();
   const panel = url ? url + "?vista=panel&c=" + config().codigo : "";
   const celda = "padding:8px 10px;border-bottom:1px solid #e3e8ec;text-align:left;font:14px Arial,sans-serif";
   const html = '<div style="font:14px Arial,sans-serif;color:#26313b"><h2 style="color:#3c4650;margin:0 0 8px">' + asunto + "</h2><p>" + intro + "</p>" +
