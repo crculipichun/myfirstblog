@@ -1,3 +1,4 @@
+const DERECHOS = "© 2026 Cristian Culipichun. Todos los derechos reservados.";
 
 const HOJA_DATOS = "_datos";
 const HOJA_CONFIG = "Configuración";
@@ -224,7 +225,7 @@ function doGet(e) {
       .addMetaTag("viewport", "width=device-width, initial-scale=1")
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
-  return salida({ app: "bitacora-flota" });
+  return salida({ app: "bitacora-flota", derechos: DERECHOS });
 }
 
 function datosPanel(codigo) {

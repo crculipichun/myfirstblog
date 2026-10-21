@@ -11,6 +11,7 @@
         android:allowBackup="true"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <meta-data android:name="derechos" android:value="© 2026 Cristian Culipichun. Todos los derechos reservados." />
         <activity
             android:name=".MainActivity"
             android:exported="true"
