@@ -1,6 +1,7 @@
 const CORREOS = "cculipichun@dimerltda.cl, earaya@dimerltda.cl";
 
 const URL_WEB = "";
+const PANEL_WEB = "";
 const _q = [164, 52, 41, 18, 27, 6, 23, 125, 55, 37, 32, 46, 8, 9, 1, 86, 62, 241, 231, 251, 233, 201, 196, 198, 192, 210, 237, 234, 133, 183, 187, 137, 158, 212, 151, 109, 122, 48, 115, 123, 87, 73, 80, 82, 46, 59, 111, 36, 56, 23, 14, 0, 15, 225, 227, 225, 230, 178];
 
 const ARCHIVO_DATOS = "Flota DIMER - datos (no borrar).json";
@@ -140,11 +141,10 @@ function instalar() {
 function mostrarLinks() {
   const cfg = config(), url = urlPublica();
   if (!url) { console.log("Primero haz Implementar → Nueva implementación → Aplicación web, y vuelve a ejecutar instalar."); return; }
-  const panel = "https://crculipichun.github.io/myfirstblog/panel.html?u=" + encodeURIComponent(url) + "&c=" + cfg.codigo;
+  const panel = PANEL_WEB || url + "?vista=panel&c=" + cfg.codigo;
   console.log([
     "Link para los celulares: " + url + "?c=" + cfg.codigo,
     "Panel web: " + panel,
-    "Panel web (alternativo, desde Google): " + url + "?vista=panel&c=" + cfg.codigo,
     "Para Odoo: <iframe src=\"" + panel + "\" style=\"width:100%;height:1600px;border:0\"></iframe>",
     "JSON: " + url + "?vista=json&c=" + cfg.codigo,
     "Código de acceso: " + cfg.codigo,
@@ -205,7 +205,7 @@ function enviarCorreo(asunto, filas, intro) {
   const para = correosAvisos();
   if (!para.length) return false;
   const url = urlPublica();
-  const panel = url ? "https://crculipichun.github.io/myfirstblog/panel.html?u=" + encodeURIComponent(url) + "&c=" + config().codigo : "";
+  const panel = PANEL_WEB || (url ? url + "?vista=panel&c=" + config().codigo : "");
   const celda = "padding:8px 10px;border-bottom:1px solid #e3e8ec;text-align:left;font:14px Arial,sans-serif";
   const html = '<div style="font:14px Arial,sans-serif;color:#26313b"><h2 style="color:#3c4650;margin:0 0 8px">' + asunto + "</h2><p>" + intro + "</p>" +
     '<table style="border-collapse:collapse"><tr>' + ["N°", "Patente", "Aviso", "Detalle"].map(t => '<th style="' + celda + ';color:#6b7783">' + t + "</th>").join("") + "</tr>" +

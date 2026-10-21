@@ -21,7 +21,9 @@ Una página con todo lo importante de la flota: se ordena tocando el título de 
 - Tabla de camiones: odómetro, próxima mantención y km que faltan, revisión técnica, permiso de circulación, deshielo, fallas, última auditoría semanal y mensual, estado. Tocando un camión se ve su detalle y sus registros.
 - Listas de fallas abiertas, mantenciones (con las columnas de la planilla de mantenciones de la empresa) y auditorías.
 
-El link del panel aparece al ejecutar `instalar` en Apps Script. Se actualiza solo cada 5 minutos.
+El panel es el archivo `panel.html`, una página aparte que lee los datos del script. Se arma con el link del script y el código de acceso escritos en `SERVIDOR_FIJO` y `CODIGO_FIJO` (o en el link: `panel.html?u=LINK&c=CODIGO`) y se puede abrir con doble clic en el computador, subir a cualquier hosting gratis (por ejemplo Netlify Drop) o pegar en una página de Odoo. La app Android lo trae adentro: el administrador lo abre con **Abrir panel web**. Se actualiza solo cada 5 minutos.
+
+Si el panel queda publicado en un link propio, escríbelo en `const PANEL_WEB = "…"` al inicio de `Codigo.gs` para que los correos de aviso lleven ese link.
 
 ## Avisos por correo
 
@@ -72,7 +74,7 @@ Para volver a generar el APK (Linux o macOS, con Java 17+, Python 3 y npm): `and
 ## Archivos
 
 - `index.html` – toda la app (HTML, CSS y JS)
-- `panel.html` – panel web (se publica con GitHub Pages y lee los datos del script)
+- `panel.html` – panel web (página aparte que lee los datos del script)
 - `google/Codigo.gs` – script de Google con el panel web y los avisos
 - `sw.js` – service worker para uso sin conexión
 - `manifest.webmanifest`, `icon.svg`, `icon-*.png` – instalación como app

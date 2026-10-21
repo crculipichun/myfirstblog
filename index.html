@@ -1000,7 +1000,7 @@ function vHistorial() {
 
 function tarjetasConexion() {
   const P = Store.pc, G = Store.esGoogle(), donde = "Apps Script, al ejecutar instalar";
-  const panelUrl = G ? "https://crculipichun.github.io/myfirstblog/panel.html?u=" + encodeURIComponent(Store.base()) + "&c=" + encodeURIComponent(codigoAcceso()) : "";
+  const panelUrl = G ? "panel.html?u=" + encodeURIComponent(Store.base()) + "&c=" + encodeURIComponent(codigoAcceso()) : "";
   const pcPanel = Store.mode !== "pc" ? "" : `<div class="panel" style="padding:16px;display:grid;gap:10px">
     <div class="spread"><h3>Envío de datos</h3><span class="pill ${!P.conectado ? "warn" : "ok"}">${!P.conectado ? "Sin conexión" : "Al día"}</span></div>
     <span class="small muted">${!P.conectado

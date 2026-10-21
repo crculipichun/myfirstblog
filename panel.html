@@ -98,7 +98,8 @@ const _r = a => String.fromCharCode(...a.map((n, i) => n ^ ((i * 7 + 13) & 255))
 const PARAM = new URLSearchParams(location.search);
 const leerLocal = k => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } };
 const guardarLocal = (k, x) => { try { localStorage.setItem(k, x); } catch (e) {} };
-const SERVIDOR = (PARAM.get("u") || leerLocal("panel_u")).trim(), CODIGO = (PARAM.get("c") || leerLocal("panel_c")).trim();
+const SERVIDOR_FIJO = "", CODIGO_FIJO = "";
+const SERVIDOR = (PARAM.get("u") || SERVIDOR_FIJO || leerLocal("panel_u")).trim(), CODIGO = (PARAM.get("c") || CODIGO_FIJO || leerLocal("panel_c")).trim();
 let DATOS = null;
 const UI = { q: "", estado: "", sel: null, tab: "fallas", orden: {} };
 const $ = s => document.querySelector(s);
@@ -237,7 +238,7 @@ function pintar() {
 function aviso(t) { $("#msg").innerHTML = t ? `<div class="err">${esc(t)}</div>` : ""; }
 
 async function actualizar() {
-  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(SERVIDOR) || !CODIGO) { aviso("Abre este panel con el link completo: panel.html?u=LINK_DEL_SCRIPT&c=CODIGO"); return; }
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(SERVIDOR) || !CODIGO) { aviso("Falta el link del script y el código de acceso: escríbelos en SERVIDOR_FIJO y CODIGO_FIJO dentro de este archivo."); return; }
   $("#btn-act").textContent = "Actualizando…";
   try {
     const r = await fetch(SERVIDOR + "?vista=json&c=" + encodeURIComponent(CODIGO), { redirect: "follow" });

@@ -92,7 +92,8 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("(window.appAtras && window.appAtras()) ? '1' : '0'", new ValueCallback<String>() {
             @Override
             public void onReceiveValue(String v) {
-                if (!"\"1\"".equals(v)) finish();
+                if ("\"1\"".equals(v)) return;
+                if (web.canGoBack()) web.goBack(); else finish();
             }
         });
     }

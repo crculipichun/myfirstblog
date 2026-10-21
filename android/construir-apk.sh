@@ -20,6 +20,8 @@ fi
 sed -e "s#const SERVIDOR_FIJO = \"\", CODIGO_FIJO = \"\";#const SERVIDOR_FIJO = \"${SERVIDOR:-}\", CODIGO_FIJO = \"${CODIGO:-}\";#" \
     ../index.html > "$B/assets/www/index.html"
 cp ../icon.svg "$B/assets/www/"
+sed -e "s#const SERVIDOR_FIJO = \"\", CODIGO_FIJO = \"\";#const SERVIDOR_FIJO = \"${SERVIDOR:-}\", CODIGO_FIJO = \"${CODIGO:-}\";#" \
+    ../panel.html > "$B/assets/www/panel.html"
 cp ../icon-192.png "$B/res/mipmap-xxxhdpi/ic_launcher.png"
 cp -r res/values "$B/res/"
 
