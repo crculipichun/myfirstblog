@@ -161,7 +161,7 @@ section { display: grid; gap: 12px; min-width: 0; }
 
 form { display: grid; gap: 16px; }
 .field { display: grid; gap: 6px; min-width: 0; }
-.field > span { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.field > span { font-size: 15px; font-weight: 600; color: var(--ink); }
 .field input, .field select, .field textarea {
   width: 100%; min-height: 46px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface);
 }
@@ -170,7 +170,19 @@ form { display: grid; gap: 16px; }
 .field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 380px) { .grid2 { grid-template-columns: 1fr; } }
-.fieldset { display: grid; gap: 12px; padding: 14px; border-radius: 10px; border: 1px dashed var(--line); background: var(--surface-2); }
+.fieldset { display: grid; gap: 12px; padding: 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); }
+.fieldset > b:first-child { font: 700 19px/1.1 var(--f-display); letter-spacing: .02em; }
+.cam-n { font: 700 28px/1 var(--f-display); min-width: 46px; text-align: center; flex: none; }
+.cam-n.lg { font-size: 38px; min-width: 0; text-align: left; }
+.cam-item { padding: 12px 12px 12px 8px; }
+.cam-item .body { gap: 6px; }
+.cam-l1 { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.cam-l1 .title { font-size: 15px; }
+.item .meta .pill { padding: 4px 8px; font-size: 12px; }
+.chev { width: 20px; height: 20px; color: var(--muted); flex: none; }
+.cam-head { padding: 16px; display: grid; gap: 10px; }
+.cam-head-top { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.cam-modelo { font-weight: 600; font-size: 17px; }
 .checks { display: flex; flex-wrap: wrap; gap: 8px; }
 .check { display: inline-flex; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; min-height: 44px; }
 .check input { width: 20px; height: 20px; accent-color: var(--accent); }
@@ -1041,9 +1053,9 @@ function vChofer() {
   if (ch.camionId) {
     const c = camion(ch.camionId); if (!c) { UI.chofer = {}; return vChofer(); }
     const cab = `<div><button class="linkbtn" data-act="${ch.tipo ? "chofer-tipos" : "chofer-volver"}">‹ ${ch.tipo ? "Cambiar tipo de auditoría" : "Cambiar camión"}</button></div>
-    <div class="panel" style="padding:16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-      <b style="font:700 34px/1 var(--f-display)">N° ${esc(c.interno || "—")}</b>${plate(c.patente, true)}
-      <div style="flex:1;min-width:0"><div style="font-weight:600">${esc(c.marca || "")} ${esc(c.modelo || "")}</div><div class="small muted">${kmDe(c) != null ? `Último odómetro: <span class="num">${fmtKm(kmDe(c))}</span>` : "Sin odómetro registrado"}</div></div>
+    <div class="panel cam-head">
+      <div class="cam-head-top"><b class="cam-n lg">N° ${esc(c.interno || "—")}</b>${plate(c.patente, true)}</div>
+      <div><div class="cam-modelo">${esc(c.marca || "")} ${esc(c.modelo || "")}</div><div class="small muted">${kmDe(c) != null ? `Último odómetro: <span class="num">${fmtKm(kmDe(c))}</span>` : "Sin odómetro registrado"}</div></div>
     </div>`;
     if (!ch.tipo) {
       const ult = t => { const a = ultimo(c.id, t); if (!a) return "Nunca se ha hecho"; const d = diasDesde(a.fecha); return d === 0 ? "Última: hoy" : `Última: hace ${d} día${d === 1 ? "" : "s"}`; };
@@ -1059,11 +1071,14 @@ function vChofer() {
     .filter(c => !q || (soloNum ? String(c.interno || "").startsWith(q) : normPatente(c.patente).includes(q) || String(c.codigoAnterior || "").toUpperCase() === q))
     .sort((a, b) => soloNum ? (String(b.interno) === q) - (String(a.interno) === q) : 0);
   const hace = (c, t) => { const a = ultimo(c.id, t); if (!a) return "nunca"; const d = diasDesde(a.fecha); return d === 0 ? "hoy" : `hace ${d} d`; };
+  const alDia = (c, t, max) => { const a = ultimo(c.id, t); return a && diasDesde(a.fecha) <= max ? "ok" : ""; };
   return `${apkBanner()}<section><h1>¿Qué camión vas a auditar?</h1>
     <label class="field"><span>Buscar por N° o patente</span><input id="ch-q" type="search" inputmode="search" autocomplete="off" value="${esc(ch.q || "")}" placeholder="Ej. 7 o STFF53"></label></section>
-    ${cams.length ? `<div class="panel list">${cams.map(c => `<button class="item" data-act="chofer-camion" data-id="${esc(c.id)}" style="padding:14px">
-        <b style="font:700 26px/1 var(--f-display);min-width:52px">${esc(c.interno || "—")}</b>${plate(c.patente)}
-        <span class="body"><span class="title">${esc(c.modelo || c.marca || "")}</span><span class="meta">Semanal ${hace(c, "semanal")} · mensual ${hace(c, "auditoria")}</span></span></button>`).join("")}</div>`
+    ${cams.length ? `<div class="panel list">${cams.map(c => `<button class="item cam-item" data-act="chofer-camion" data-id="${esc(c.id)}">
+        <b class="cam-n">${esc(c.interno || "—")}</b>
+        <span class="body"><span class="cam-l1">${plate(c.patente)}<span class="title">${esc(c.modelo || c.marca || "")}</span></span>
+          <span class="meta"><span class="pill ${alDia(c, "semanal", 7)}">Semanal: ${hace(c, "semanal")}</span><span class="pill ${alDia(c, "auditoria", 31)}">Mensual: ${hace(c, "auditoria")}</span></span></span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>`).join("")}</div>`
       : Store.camiones.length ? `<p class="muted">No hay camiones con "${esc(ch.q)}".</p>` : emptyFlota()}
     <button class="linkbtn" data-nav-link="ajustes" style="justify-self:center;padding:8px">Ajustes y conexión</button>`;
 }

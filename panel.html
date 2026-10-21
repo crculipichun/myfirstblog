@@ -7,7 +7,7 @@
 <style>
 :root {
   --bg: #f4f6f8; --surface: #ffffff; --surface-2: #f7f9fa; --ink: #26313b; --muted: #6b7783; --line: #e3e8ec;
-  --head: #3c4650;
+  --head: #3c4650; --bar: #16202b; --bar-ink: #e9eef3; --bar-muted: #93a1b1;
   --ok: #2e7d4f; --ok-bg: rgba(76, 175, 106, .16); --warn: #9a6a00; --warn-bg: rgba(242, 184, 40, .20); --bad: #b3363a; --bad-bg: rgba(226, 92, 92, .16);
   --info: #2f5f8f; --info-bg: rgba(84, 140, 200, .14);
   --f: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -15,28 +15,58 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 400 14px/1.45 var(--f); }
 .wrap { max-width: 1500px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-header { background: var(--surface); border-bottom: 1px solid var(--line); }
+header { background: var(--bar); color: var(--bar-ink); }
+header h1 { color: #fff; }
+header .sub { color: var(--bar-muted); }
+header .btn { background: transparent; color: #fff; border-color: rgba(255,255,255,.28); }
+header .btn:hover { border-color: #fff; }
 header .wrap { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-block: 12px; }
-.marca { width: 38px; height: 38px; flex: none; }
+.marca { width: 40px; height: 40px; flex: none; }
 h1 { margin: 0; font-size: 20px; font-weight: 700; color: var(--head); }
 .sub { color: var(--muted); font-size: 13px; }
 .sp { flex: 1; }
 button { font: inherit; color: inherit; }
 .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 14px; font-weight: 600; cursor: pointer; }
 .btn:hover { border-color: var(--muted); }
-main { padding-block: 20px 48px; display: grid; gap: 28px; }
+main { padding-block: 20px 48px; display: grid; gap: 32px; }
 main > * { min-width: 0; }
 h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--head); }
 .nota { margin: 4px 0 0; color: var(--muted); font-size: 13px; max-width: 120ch; }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; }
-.kpi b { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.kpi span { color: var(--muted); font-size: 12.5px; line-height: 1.25; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 4px; align-content: start; box-shadow: 0 1px 2px rgba(22,32,43,.05); }
+.kpi b { font-size: 30px; line-height: 1.05; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--head); }
+.kpi span { color: var(--muted); font-size: 13px; line-height: 1.3; }
+.kpi.k-grave { border-left-color: #e45b5b; } .kpi.k-grave b { color: #b3262b; }
+.kpi.k-leve { border-left-color: #f4a9a9; }
+.kpi.k-bad { border-left-color: #e57373; } .kpi.k-bad b { color: #a3161b; }
+.kpi.k-am { border-left-color: #ffd84d; }
 .tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
 .tools input { flex: 1 1 220px; max-width: 360px; min-height: 36px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; }
 .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-weight: 600; font-size: 13px; cursor: pointer; }
 .chip[aria-pressed="true"] { background: var(--head); color: #fff; border-color: var(--head); }
-.tabla { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: auto; max-height: 78vh; margin-top: 10px; }
+.tabla { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: auto; max-height: 78vh; margin-top: 12px; box-shadow: 0 1px 2px rgba(22,32,43,.05); }
+.tarjetas { display: none; }
+.tarjeta { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; cursor: pointer; box-shadow: 0 1px 2px rgba(22,32,43,.05); }
+.tarjeta.sel { border-color: var(--info); box-shadow: 0 0 0 2px var(--info); }
+.t-top { display: flex; gap: 10px; align-items: center; }
+.t-top .sp { flex: 1; }
+.t-n { font-size: 20px; color: var(--head); }
+.t-veh { color: var(--muted); font-size: 13px; }
+.t-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.t-grid div { background: var(--surface-2); border-radius: 8px; padding: 7px 9px; font-size: 13px; font-variant-numeric: tabular-nums; min-width: 0; }
+.t-grid span { display: block; font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.t-grid div.d-ok { background: #d6f0dd; color: #1d5e36; } .t-grid div.d-am1 { background: #fff3b0; color: #6b5200; } .t-grid div.d-am2 { background: #ffd84d; color: #4d3a00; font-weight: 600; } .t-grid div.d-bad { background: #f6b3b3; color: #7a1418; font-weight: 600; }
+.t-grid div.f-leve { background: #fde2e2; color: #8a1c20; } .t-grid div.f-grave { background: #e45b5b; color: #fff; font-weight: 700; }
+.t-grid div[class] span { color: inherit; opacity: .8; }
+.estado { font-weight: 500; } .estado.det { font-weight: 800; }
+@media (max-width: 760px) {
+  #t-camiones { display: none; }
+  .tarjetas { display: grid; gap: 10px; margin-top: 12px; }
+  .leyenda { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; font-size: 12px; line-height: 1.3; }
+  .leyenda b { grid-column: 1 / -1; }
+  .kpi b { font-size: 26px; }
+  h1 { font-size: 18px; }
+}
 table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13.5px; }
 th { position: sticky; top: 0; z-index: 2; background: var(--surface); text-align: right; font-weight: 600; color: var(--head); padding: 12px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: pointer; user-select: none; }
 th.izq, td.izq { text-align: left; }
@@ -82,6 +112,7 @@ td.txt { white-space: normal; min-width: 200px; max-width: 420px; text-align: le
     <div class="leyenda"><b>Fallas abiertas:</b><span style="--c:#fde2e2">Leve</span><span style="--c:#e45b5b">Grave (el camión no puede trabajar, o severidad alta o crítica)</span></div>
     <div class="tools"><input id="q" type="search" placeholder="Buscar por N°, patente o código" aria-label="Buscar camión"><span id="chips"></span></div>
     <div class="tabla" id="t-camiones"></div>
+    <div class="tarjetas" id="c-camiones"></div>
     <div id="detalle"></div>
   </section>
   <section>
@@ -118,7 +149,7 @@ const COL_CAMIONES = [
   { t: "N°", izq: 1, v: c => c.interno, orden: c => { const m = /^([A-Z]*)(\d+)$/i.exec(String(c.interno)); return m ? (m[1] ? 1e6 : 0) + Number(m[2]) : 1e9; }, f: c => `<b>${esc(c.interno || "–")}</b>` },
   { t: "Patente", izq: 1, v: c => c.patente, f: c => `<span class="plate">${esc(c.patente)}</span>` },
   { t: "Vehículo", izq: 1, v: c => c.vehiculo, f: c => `${esc(c.vehiculo)} <span class="muted">${esc(c.anio)}</span>` },
-  { t: "Estado", izq: 1, v: c => ({ Detenido: 0, Revisar: 1, Operativo: 2 })[c.estado], f: c => esc(c.estado) },
+  { t: "Estado", izq: 1, v: c => ({ Detenido: 0, Revisar: 1, Operativo: 2 })[c.estado], f: c => `<span class="estado ${c.estado === "Detenido" ? "det" : ""}">${esc(c.estado)}</span>` },
   { t: "Odómetro", v: c => c.km, f: c => c.km == null ? "–" : miles(c.km) + " km" },
   { t: "Km 30 días", v: c => c.km30, f: c => c.km30 == null ? "–" : miles(c.km30) },
   { t: "Faltan mant.", v: c => c.faltaMant,
@@ -154,16 +185,17 @@ function tabla(id, filas, cols, opts) {
 
 function kpis() {
   const k = DATOS.kpi;
-  const t = (v, l) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`;
+  const t = (v, l, k) => `<div class="kpi ${k || ""}"><b>${v}</b><span>${l}</span></div>`;
+  const graves = DATOS.camiones.reduce((a, c) => a + (c.fallasGraves || 0), 0);
   $("#kpis").innerHTML = [
-    t(k.operativos + "/" + k.total, "Operativos", "ok"),
-    t(k.detenidos, "Detenidos", k.detenidos ? "bad" : ""),
-    t(k.fallas, "Fallas abiertas", k.fallas ? "bad" : ""),
-    t(k.deshielo, "Necesitan deshielo", k.deshielo ? "warn" : ""),
-    t(k.mantencion, "Mantención próxima o atrasada", k.mantencion ? "warn" : ""),
-    t(k.docsVencidos, "Documentos vencidos" + (k.docsPorVencer ? " · " + k.docsPorVencer + " vencen en 60 días" : ""), k.docsVencidos ? "bad" : k.docsPorVencer ? "warn" : ""),
-    t(k.semanalAlDia + "/" + k.total, "Auditoría semanal al día", k.semanalAlDia < k.total ? "warn" : "ok"),
-    t(k.mensualAlDia + "/" + k.total, "Auditoría mensual al día", k.mensualAlDia < k.total ? "warn" : "ok")
+    t(k.operativos + "/" + k.total, "Operativos"),
+    t(k.detenidos, "Detenidos", k.detenidos ? "k-grave" : ""),
+    t(k.fallas, "Fallas abiertas" + (graves ? " · " + graves + (graves === 1 ? " grave" : " graves") : ""), graves ? "k-grave" : k.fallas ? "k-leve" : ""),
+    t(k.deshielo, "Necesitan deshielo"),
+    t(k.mantencion, "Mantención próxima o atrasada"),
+    t(k.docsVencidos, "Documentos vencidos" + (k.docsPorVencer ? " · " + k.docsPorVencer + " vencen en 60 días" : ""), k.docsVencidos ? "k-bad" : k.docsPorVencer ? "k-am" : ""),
+    t(k.semanalAlDia + "/" + k.total, "Auditoría semanal al día"),
+    t(k.mensualAlDia + "/" + k.total, "Auditoría mensual al día")
   ].join("");
 }
 
@@ -177,6 +209,20 @@ function camiones() {
   if (!DATOS) return;
   $("#chips").innerHTML = ["", "Detenido", "Revisar", "Operativo"].map(e => `<button class="chip" data-estado="${e}" aria-pressed="${UI.estado === e}">${e || "Todos"}${e ? " · " + DATOS.camiones.filter(c => c.estado === e).length : ""}</button>`).join(" ");
   tabla("t-camiones", camionesFiltrados(), COL_CAMIONES, { fila: true, sel: c => c.id === UI.sel, vacio: "No hay camiones con ese filtro." });
+  const lista = camionesFiltrados().slice().sort((a, b) => COL_CAMIONES[0].orden(a) - COL_CAMIONES[0].orden(b));
+  const celda = (etq, txt, col) => `<div class="${col ? col[0] : ""}"><span>${etq}</span>${txt}</div>`;
+  const doc = d => d.vence ? fF(d.vence) + (d.dias < 0 ? " · vencido" : " · " + d.dias + " d") : "sin dato";
+  $("#c-camiones").innerHTML = lista.length ? lista.map(c => `<div class="tarjeta fila ${c.id === UI.sel ? "sel" : ""}" data-id="${esc(c.id)}">
+    <div class="t-top"><b class="t-n">N° ${esc(c.interno || "–")}</b><span class="plate">${esc(c.patente)}</span><span class="sp"></span><span class="pill estado ${c.estado === "Detenido" ? "det" : ""}">${esc(c.estado)}</span></div>
+    <div class="t-veh">${esc(c.vehiculo)} ${esc(c.anio)}</div>
+    <div class="t-grid">
+      ${celda("Odómetro", c.km == null ? "–" : miles(c.km) + " km")}
+      ${celda("Próxima mantención", c.faltaMant == null ? "–" : c.faltaMant <= 0 ? "atrasada " + miles(-c.faltaMant) + " km" : "faltan " + miles(c.faltaMant) + " km")}
+      ${celda("Revisión técnica", doc(c.rt), docColor(c.rt.dias))}
+      ${celda("Permiso de circulación", doc(c.permiso), docColor(c.permiso.dias))}
+      ${celda("Fallas abiertas", !c.fallasAbiertas ? "0" : c.fallasAbiertas + (c.fallasGraves ? " · " + c.fallasGraves + " grave" + (c.fallasGraves === 1 ? "" : "s") : " leve" + (c.fallasAbiertas === 1 ? "" : "s")), fallaColor(c.fallasGraves, c.fallasAbiertas))}
+      ${celda("Última semanal", c.diasSemanal == null ? "nunca" : c.diasSemanal === 0 ? "hoy" : "hace " + c.diasSemanal + " d")}
+    </div></div>`).join("") : `<p class="muted">No hay camiones con ese filtro.</p>`;
 }
 
 function detalle() {
@@ -277,7 +323,7 @@ async function actualizar() {
 document.addEventListener("click", e => {
   const th = e.target.closest("th[data-orden]");
   if (th) { const [id, i] = th.dataset.orden.split(":"), o = UI.orden[id] || {}; UI.orden[id] = { i: Number(i), dir: o.i === Number(i) ? -o.dir : 1 }; id === "t-camiones" ? camiones() : registros(); return; }
-  const f = e.target.closest("tr.fila"); if (f) { UI.sel = UI.sel === f.dataset.id ? null : f.dataset.id; pintar(); if (UI.sel) $("#detalle").scrollIntoView({ behavior: "smooth", block: "nearest" }); return; }
+  const f = e.target.closest(".fila"); if (f) { UI.sel = UI.sel === f.dataset.id ? null : f.dataset.id; pintar(); if (UI.sel) $("#detalle").scrollIntoView({ behavior: "smooth", block: "nearest" }); return; }
   const est = e.target.closest("[data-estado]"); if (est) { UI.estado = est.dataset.estado; camiones(); return; }
   const tab = e.target.closest("[data-tab]"); if (tab) { UI.tab = tab.dataset.tab; registros(); return; }
   if (e.target.closest("[data-cerrar]")) { UI.sel = null; pintar(); return; }
