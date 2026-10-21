@@ -1,4 +1,4 @@
-const URL_WEB = "https://script.google.com/macros/s/AKfycbxdCZ-ssAqfmoj2P1Mx8NbIUxDUKviOdwyTlwwXjuHkWWf4tFRNbhx_ytabby9c1CRLSw/exec";
+const URL_WEB = "";
 const _q = [164, 52, 41, 18, 27, 6, 23, 125, 55, 37, 32, 46, 8, 9, 1, 86, 62, 241, 231, 251, 233, 201, 196, 198, 192, 210, 237, 234, 133, 183, 187, 137, 158, 212, 151, 109, 122, 48, 115, 123, 87, 73, 80, 82, 46, 59, 111, 36, 56, 23, 14, 0, 15, 225, 227, 225, 230, 178];
 
 const HOJA_DATOS = "_datos";
