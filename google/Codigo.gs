@@ -1,8 +1,9 @@
+const CORREOS = "cculipichun@dimerltda.cl, earaya@dimerltda.cl";
+
 const URL_WEB = "";
 const _q = [164, 52, 41, 18, 27, 6, 23, 125, 55, 37, 32, 46, 8, 9, 1, 86, 62, 241, 231, 251, 233, 201, 196, 198, 192, 210, 237, 234, 133, 183, 187, 137, 158, 212, 151, 109, 122, 48, 115, 123, 87, 73, 80, 82, 46, 59, 111, 36, 56, 23, 14, 0, 15, 225, 227, 225, 230, 178];
 
-const HOJA_DATOS = "_datos";
-const HOJA_CONFIG = "Configuración";
+const ARCHIVO_DATOS = "Flota DIMER - datos (no borrar).json";
 const COLECCIONES = ["camiones", "registros"];
 const VERSION_DATOS = "2026-10-21";
 
@@ -123,10 +124,6 @@ const TIPOS = { semanal: "Auditoría semanal", auditoria: "Auditoría mensual", 
 const DOCS = [["vRevision", "Revisión técnica", "rtFecha"], ["vPermiso", "Permiso de circulación", "permisoFecha"], ["vSoap", "SOAP"], ["vExtintor", "Extintor"]];
 const LIMPIEZA = [["cabina", "Cabina"], ["caja", "Caja frigorífica"], ["exterior", "Exterior"], ["seguridad", "Elementos de seguridad"]];
 
-function onOpen() {
-  SpreadsheetApp.getUi().createMenu("Bitácora").addItem("Instalar o actualizar", "instalar").addItem("Enviar correo de prueba", "probarCorreo").addToUi();
-}
-
 function instalar() {
   const cfg = config();
   const datos = leer();
@@ -135,10 +132,25 @@ function instalar() {
   if (p.getProperty("VERSION_DATOS") !== VERSION_DATOS) { migrarFlota(datos); p.setProperty("VERSION_DATOS", VERSION_DATOS); }
   importarHistorial(datos);
   guardar(datos);
-  quitarHojasAntiguas();
-  escribirConfig(cfg);
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === "avisoDiario").forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger("avisoDiario").timeBased().everyDays(1).atHour(8).create();
+  mostrarLinks();
+}
+
+function mostrarLinks() {
+  const cfg = config(), url = urlPublica();
+  if (!url) { console.log("Primero haz Implementar → Nueva implementación → Aplicación web, y vuelve a ejecutar instalar."); return; }
+  const panel = url + "?vista=panel&c=" + cfg.codigo;
+  console.log([
+    "Link para los celulares: " + url + "?c=" + cfg.codigo,
+    "Panel web: " + panel,
+    "Para Odoo: <iframe src=\"" + panel + "\" style=\"width:100%;height:1600px;border:0\"></iframe>",
+    "JSON: " + url + "?vista=json&c=" + cfg.codigo,
+    "Código de acceso: " + cfg.codigo,
+    "PIN de administrador: " + cfg.pin,
+    "Correos para avisos: " + (correosAvisos().join(", ") || "ninguno (escríbelos en la línea CORREOS al inicio del código)"),
+    "Datos guardados en Drive: " + archivoDatos().getUrl()
+  ].join("\n"));
 }
 
 const norm = p => String(p || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -166,12 +178,6 @@ function importarHistorial(datos) {
   });
 }
 
-function quitarHojasAntiguas() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  ["Flota", "Documentos", "Auditorías", "Auditorías semanales", "Auditorías mensuales", "Mantenciones", "Preventivas", "Correctivas", "Fallas", "Cambios de aceite", "Odómetro", "Todos los registros"]
-    .forEach(nombre => { const h = ss.getSheetByName(nombre); if (h && ss.getSheets().length > 1) ss.deleteSheet(h); });
-}
-
 function config() {
   const p = PropertiesService.getScriptProperties();
   if (!p.getProperty("CODIGO")) {
@@ -188,43 +194,8 @@ function urlPublica() {
   return u.replace(/^https:\/\/script\.google\.com\/a\/macros\/[^/]+\//, "https://script.google.com/macros/").replace(/^https:\/\/script\.google\.com\/a\/[^/]+\/macros\//, "https://script.google.com/macros/").replace(/\/(dev|exec)(\?.*)?$/, "/exec");
 }
 
-function escribirConfig(cfg) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const h = ss.getSheetByName(HOJA_CONFIG) || ss.insertSheet(HOJA_CONFIG);
-  const url = urlPublica();
-  const falta = "Primero implementa el script como aplicación web (paso 2) y vuelve a usar Bitácora → Instalar o actualizar.";
-  const panel = url ? url + "?vista=panel&c=" + cfg.codigo : falta;
-  const previos = textoCorreos();
-  h.clear();
-  h.getRange(1, 1, 9, 2).setValues([
-    ["Bitácora de Flota", ""],
-    ["Link para los celulares (pégalo en la app: Ajustes y conexión)", url ? url + "?c=" + cfg.codigo : falta],
-    ["Panel web (ábrelo en el navegador o incrústalo en Odoo)", panel],
-    ["Código para incrustar el panel en Odoo (bloque «Código incrustado» del sitio web)", url ? '<iframe src="' + panel + '" style="width:100%;height:1600px;border:0"></iframe>' : falta],
-    ["Datos en JSON para otros programas (Odoo, Power BI…)", url ? url + "?vista=json&c=" + cfg.codigo : falta],
-    ["Código de acceso", cfg.codigo],
-    ["PIN de administrador (agrega y edita camiones; no lo compartas)", cfg.pin],
-    ["Para cambiar el código o el PIN", "Apps Script → Configuración del proyecto → Propiedades del script: CODIGO y PIN"],
-    [FILA_CORREOS, previos]
-  ]);
-  h.getRange("B9").setBackground("#fff3b0").setNote("Escribe aquí los correos que reciben los avisos, separados por coma.");
-  h.getRange("A1").setFontSize(14).setFontWeight("bold");
-  h.getRange("A2:A9").setFontWeight("bold");
-  h.setColumnWidth(1, 420); h.setColumnWidth(2, 720);
-  h.getRange("B2:B9").setWrap(true);
-}
-
-const FILA_CORREOS = "Correos para avisos (separados por coma)";
-
-function textoCorreos() {
-  const h = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_CONFIG);
-  if (!h || h.getLastRow() < 1) return "";
-  const fila = h.getRange(1, 1, h.getLastRow(), 2).getValues().find(f => f[0] === FILA_CORREOS);
-  return fila ? String(fila[1] || "") : "";
-}
-
 function correosAvisos() {
-  return textoCorreos().split(/[,;\s]+/).map(x => x.trim()).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
+  return String(CORREOS || "").split(/[,;\s]+/).map(x => x.trim()).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
 }
 
 const esGrave = r => !!r.detenido || /alta|cr[ií]tica|grave/i.test(r.severidad || "");
@@ -295,7 +266,7 @@ function avisoDiario() { revisarVencimientos(leer()); }
 
 function probarCorreo() {
   const ok = enviarCorreo("correo de prueba", [{ interno: "–", patente: "–", aviso: "Prueba", detalle: "Si recibes este correo, los avisos de la flota están funcionando." }], "Correo de prueba de los avisos de la flota.");
-  SpreadsheetApp.getUi().alert(ok ? "Correo enviado a: " + correosAvisos().join(", ") : "Escribe al menos un correo en la hoja Configuración, fila «" + FILA_CORREOS + "».");
+  console.log(ok ? "Correo enviado a: " + correosAvisos().join(", ") : "Escribe al menos un correo en la línea CORREOS al inicio del código.");
 }
 
 function doGet(e) {
@@ -304,7 +275,7 @@ function doGet(e) {
     if (!igual(q.c, config().codigo)) {
       Utilities.sleep(1000);
       return q.vista === "json" ? salida({ error: "codigo" })
-        : HtmlService.createHtmlOutput("<p style='font:16px system-ui;padding:24px'>Falta el código de acceso en el link (…&amp;c=CODIGO). Cópialo de la hoja Configuración.</p>");
+        : HtmlService.createHtmlOutput("<p style='font:16px system-ui;padding:24px'>Falta el código de acceso en el link (…&amp;c=CODIGO). Pídeselo al administrador.</p>");
     }
     const r = resumen(leer());
     if (q.vista === "json") return salida(r);
@@ -355,7 +326,7 @@ function doPost(e) {
     }
     return salida({
       datos: datos, admin: admin, rechazados: rechazados,
-      planilla: { planilla: SpreadsheetApp.getActiveSpreadsheet().getUrl(), ultima: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss"), pendiente: false }
+      planilla: { planilla: "", ultima: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss"), pendiente: false }
     });
   } catch (err) {
     return salida({ error: "interno", mensaje: String(err) });
@@ -372,30 +343,24 @@ function igual(dado, esperado) {
   return typeof dado === "string" && !!esperado && dado.trim().toUpperCase() === String(esperado).toUpperCase();
 }
 
-function hojaDatos() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let h = ss.getSheetByName(HOJA_DATOS);
-  if (!h) { h = ss.insertSheet(HOJA_DATOS); h.hideSheet(); }
-  return h;
+function archivoDatos() {
+  const p = PropertiesService.getScriptProperties(), id = p.getProperty("ARCHIVO_DATOS");
+  if (id) { try { const f = DriveApp.getFileById(id); if (!f.isTrashed()) return f; } catch (err) {  } }
+  const f = DriveApp.createFile(ARCHIVO_DATOS, JSON.stringify({ camiones: [], registros: [] }), "application/json");
+  p.setProperty("ARCHIVO_DATOS", f.getId());
+  return f;
 }
 
 function leer() {
   const datos = { camiones: [], registros: [] };
-  const h = hojaDatos();
-  if (h.getLastRow() < 1) return datos;
-  h.getRange(1, 1, h.getLastRow(), 3).getValues().forEach(f => {
-    if (!datos[f[0]]) return;
-    try { datos[f[0]].push(JSON.parse(f[2])); } catch (err) {  }
-  });
+  let d = {}; try { d = JSON.parse(archivoDatos().getBlob().getDataAsString("UTF-8") || "{}"); } catch (err) { d = {}; }
+  COLECCIONES.forEach(col => { if (Array.isArray(d[col])) datos[col] = d[col]; });
   return datos;
 }
 
 function guardar(datos) {
-  const h = hojaDatos();
-  const filas = [];
-  COLECCIONES.forEach(col => datos[col].forEach(x => filas.push([col, x.id, JSON.stringify(x)])));
-  h.clearContents();
-  if (filas.length) h.getRange(1, 1, filas.length, 3).setValues(filas);
+  const d = {}; COLECCIONES.forEach(col => { d[col] = datos[col]; });
+  archivoDatos().setContent(JSON.stringify(d));
 }
 
 function fecha(s) {

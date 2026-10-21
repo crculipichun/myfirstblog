@@ -425,12 +425,12 @@ const Store = {
     document.addEventListener("visibilitychange", () => { if (!document.hidden) this.sync(); });
   },
   async conectar(dir, codigo) {
-    let u = String(dir || "").trim(); if (!u) { toast("Pega el link que aparece en la hoja Configuración."); return; }
+    let u = String(dir || "").trim(); if (!u) { toast("Pega el link para los celulares que te dio el administrador."); return; }
     try { const q = new URL(u.includes("://") ? u : "https://" + u).searchParams; if (q.get("u")) { codigo = codigo || q.get("c"); u = q.get("u"); } } catch {}
     const m = u.match(/[?&]c=([A-Za-z0-9]+)/); if (m) codigo = codigo || m[1];
     u = u.replace(/[?#].*$/, "");
     if (codigo) sset("bf_codigo", String(codigo).trim().toUpperCase());
-    if (!codigoAcceso()) { toast("Escribe el código de acceso que aparece en la hoja Configuración."); return; }
+    if (!codigoAcceso()) { toast("Escribe el código de acceso que te dio el administrador."); return; }
     const local = /^(https?:\/\/)?(localhost|\d{1,3}(\.\d{1,3}){3})(:|\/|$)/i.test(u);
     if (!/^https?:\/\//i.test(u)) u = (local ? "http://" : "https://") + u;
     if (!this.esGoogle(u)) {
@@ -440,7 +440,7 @@ const Store = {
     let r = null, err = null;
     try { r = await this.api("estado", {}, u); } catch (e) { err = e; }
     if (!r || r.app !== "bitacora-flota") { this.pc.ultimoError = explicarError(err); render(); toast("No se pudo conectar. " + this.pc.ultimoError); return; }
-    if (!r.codigoOk) { this.pc.codigoMal = true; this.badge(); render(); toast("El código de acceso no es correcto. Revísalo en la hoja Configuración."); return; }
+    if (!r.codigoOk) { this.pc.codigoMal = true; this.badge(); render(); toast("El código de acceso no es correcto. Pregúntalo al administrador."); return; }
     const antes = this.mode;
     sset("bf_server", u); this.iniciarPC();
     if (antes === "local") {
@@ -546,7 +546,7 @@ async function entrarAdmin(pin) {
   if (Store.mode === "pc") {
     const r = await Store.api("admin", { pin }).catch(() => null);
     if (!r) { toast("No hay conexión con el panel. Revisa la señal e intenta de nuevo."); return; }
-    if (!r.ok) { toast("PIN incorrecto. Revísalo en la hoja Configuración."); return; }
+    if (!r.ok) { toast("PIN incorrecto. Pregúntalo al administrador."); return; }
     sset("bf_pin", pin); UI.admin = true;
   } else {
     const guardado = sget("bf_pin_local");
@@ -999,7 +999,7 @@ function vHistorial() {
 }
 
 function tarjetasConexion() {
-  const P = Store.pc, G = Store.esGoogle(), donde = "la hoja Configuración";
+  const P = Store.pc, G = Store.esGoogle(), donde = "Apps Script, al ejecutar instalar";
   const panelUrl = G ? Store.base() + "?vista=panel&c=" + encodeURIComponent(codigoAcceso()) : "";
   const pcPanel = Store.mode !== "pc" ? "" : `<div class="panel" style="padding:16px;display:grid;gap:10px">
     <div class="spread"><h3>Envío de datos</h3><span class="pill ${!P.conectado ? "warn" : "ok"}">${!P.conectado ? "Sin conexión" : "Al día"}</span></div>
@@ -1010,7 +1010,7 @@ function tarjetasConexion() {
   const conLink = EN_APK || Store.mode === "local";
   const srvCard = !conLink && !(Store.mode === "pc" && (P.codigoMal || !codigoAcceso())) ? "" : `<div class="panel" style="padding:16px;display:grid;gap:10px">
     <div class="spread"><h3>Conexión con el panel</h3>${P.codigoMal ? `<span class="pill bad">Código incorrecto</span>` : ""}</div>
-    <span class="small muted">${conLink ? "Pega el link para los celulares que aparece en la hoja Configuración. Funciona con cualquier conexión a internet." : `Escribe el código de acceso que aparece en ${donde}.`}</span>
+    <span class="small muted">${conLink ? "Pega el link para los celulares que te dio el administrador. Funciona con cualquier conexión a internet." : `Escribe el código de acceso que aparece en ${donde}.`}</span>
     ${conLink ? `<label class="field"><span>Link</span><input id="srv-url" inputmode="url" autocapitalize="none" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec?c=…" value="${esc(sget("bf_server") || SERVIDOR_FIJO)}"></label>` : ""}
     <label class="field"><span>Código de acceso</span><input id="srv-codigo" autocapitalize="characters" autocomplete="off" placeholder="Ej. K7PQ3M" value="${esc(codigoAcceso())}"></label>
     <button class="btn primary" data-act="${conLink ? "conectar" : "codigo"}">${Store.mode === "pc" && conLink ? "Guardar conexión" : "Conectar"}</button></div>`;
