@@ -599,7 +599,7 @@ function estadoDoc(f) {
   if (!f) return null;
   const d = -diasDesde(f);
   if (d < 0) return { nivel: "bad", texto: `Vencido el ${fmtFecha(f)}` };
-  if (d <= 30) return { nivel: "warn", texto: `Vence en ${d} día${d === 1 ? "" : "s"} (${fmtFecha(f)})` };
+  if (d <= 60) return { nivel: "warn", texto: `Vence en ${d} día${d === 1 ? "" : "s"} (${fmtFecha(f)})` };
   return { nivel: "ok", texto: `Vigente hasta ${fmtFecha(f)}` };
 }
 const abiertas = id => Store.registros.filter(r => (!id || r.camionId === id) && r.tipo === "falla" && r.estado !== "Cerrado");

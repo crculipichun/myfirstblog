@@ -241,7 +241,7 @@ function calculos(d) {
     estadoDoc: s => {
       const f = fecha(s); if (!f) return { estado: "Sin dato", nivel: "info", dias: null };
       const dias = Math.round((f - hoy) / 864e5);
-      return dias < 0 ? { estado: "Vencido", nivel: "bad", dias: dias } : dias <= 30 ? { estado: "Por vencer", nivel: "warn", dias: dias } : { estado: "Vigente", nivel: "ok", dias: dias };
+      return dias < 0 ? { estado: "Vencido", nivel: "bad", dias: dias } : dias <= 60 ? { estado: "Por vencer", nivel: "warn", dias: dias } : { estado: "Vigente", nivel: "ok", dias: dias };
     },
     pat: r => patente((camiones[r.camionId] || {}).patente || r.patente),
     interno: r => (camiones[r.camionId] || {}).interno || "",

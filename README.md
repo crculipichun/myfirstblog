@@ -14,7 +14,7 @@ Si reportan una falla, eligen qué falla, la describen y dicen si la camioneta p
 
 ## Panel web
 
-Una página con todo lo importante de la flota, en el estilo de una tabla de indicadores: se ordena tocando el título de cada columna y cada celda se pinta en verde (mejor), ámbar (cerca) o rojo (peor que la mediana). Documentos, mantención y auditorías se pintan según su vencimiento.
+Una página con todo lo importante de la flota, en el estilo de una tabla de indicadores: se ordena tocando el título de cada columna y cada celda se pinta en verde (mejor), ámbar (cerca) o rojo (peor que la mediana). Revisión técnica y permiso de circulación: verde vigente, amarillo claro si vencen en 31 a 60 días, amarillo fuerte si vencen en 30 días o menos y rojo si están vencidos. Mantención y auditorías se pintan según su vencimiento.
 - Resumen: operativos, detenidos, fallas abiertas, deshielo pendiente, mantención próxima, documentos vencidos y cuántos camiones tienen la auditoría semanal y mensual al día.
 - Tabla de camiones: odómetro, próxima mantención y km que faltan, revisión técnica, permiso de circulación, deshielo, fallas, última auditoría semanal y mensual, estado. Tocando un camión se ve su detalle y sus registros.
 - Listas de fallas abiertas, mantenciones (con las columnas de la planilla de mantenciones de la empresa) y auditorías.
