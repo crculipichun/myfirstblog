@@ -2,8 +2,6 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="author" content="Cristian Culipichun">
-<meta name="copyright" content="© 2026 Cristian Culipichun. Todos los derechos reservados.">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#16202b">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -361,6 +359,9 @@ const sset = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 const sdel = k => { try { localStorage.removeItem(k); } catch {} };
 const EN_APK = location.protocol === "file:";
 const SERVIDOR_FIJO = "", CODIGO_FIJO = "";
+const _q = [164, 52, 41, 18, 27, 6, 23, 125, 55, 37, 32, 46, 8, 9, 1, 86, 62, 241, 231, 251, 233, 201, 196, 198, 192, 210, 237, 234, 133, 183, 187, 137, 158, 212, 151, 109, 122, 48, 115, 123, 87, 73, 80, 82, 46, 59, 111, 36, 56, 23, 14, 0, 15, 225, 227, 225, 230, 178];
+const _r = a => String.fromCharCode(...a.map((n, i) => n ^ ((i * 7 + 13) & 255)));
+(() => { const m = document.createElement("meta"); m.name = "copyright"; m.content = _r(_q); document.head.appendChild(m); })();
 const codigoAcceso = () => sget("bf_codigo") || CODIGO_FIJO;
 if (SERVIDOR_FIJO && sget("bf_fijo") !== SERVIDOR_FIJO) { sset("bf_server", SERVIDOR_FIJO); if (CODIGO_FIJO) sset("bf_codigo", CODIGO_FIJO); sset("bf_fijo", SERVIDOR_FIJO); }
 (() => { try {
