@@ -1,3 +1,4 @@
+const URL_WEB = "https://script.google.com/macros/s/AKfycbxdCZ-ssAqfmoj2P1Mx8NbIUxDUKviOdwyTlwwXjuHkWWf4tFRNbhx_ytabby9c1CRLSw/exec";
 const DERECHOS = "© 2026 Cristian Culipichun. Todos los derechos reservados.";
 
 const HOJA_DATOS = "_datos";
@@ -123,13 +124,14 @@ const DOCS = [["vRevision", "Revisión técnica", "rtFecha"], ["vPermiso", "Perm
 const LIMPIEZA = [["cabina", "Cabina"], ["caja", "Caja frigorífica"], ["exterior", "Exterior"], ["seguridad", "Elementos de seguridad"]];
 
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu("Bitácora").addItem("Instalar o actualizar", "instalar").addItem("Enviar correo de prueba", "probarCorreo").addItem("Cambiar link de la aplicación web", "cambiarLink").addToUi();
+  SpreadsheetApp.getUi().createMenu("Bitácora").addItem("Instalar o actualizar", "instalar").addItem("Enviar correo de prueba", "probarCorreo").addToUi();
 }
 
 function instalar() {
   const cfg = config();
   const datos = leer();
   const p = PropertiesService.getScriptProperties();
+  p.deleteProperty("URL_PUBLICA");
   if (p.getProperty("VERSION_DATOS") !== VERSION_DATOS) { migrarFlota(datos); p.setProperty("VERSION_DATOS", VERSION_DATOS); }
   importarHistorial(datos);
   guardar(datos);
@@ -182,22 +184,8 @@ function config() {
 }
 
 function urlPublica() {
-  const propia = PropertiesService.getScriptProperties().getProperty("URL_PUBLICA");
-  const u = (propia || ScriptApp.getService().getUrl() || "").trim();
+  const u = (URL_WEB || ScriptApp.getService().getUrl() || "").trim();
   return u.replace(/^https:\/\/script\.google\.com\/a\/macros\/[^/]+\//, "https://script.google.com/macros/").replace(/^https:\/\/script\.google\.com\/a\/[^/]+\/macros\//, "https://script.google.com/macros/").replace(/\/(dev|exec)(\?.*)?$/, "/exec");
-}
-
-function cambiarLink() {
-  const ui = SpreadsheetApp.getUi();
-  const r = ui.prompt("Link de la aplicación web", "Pega el link que termina en /exec (Implementar → Administrar implementaciones). Déjalo vacío para usar el automático.", ui.ButtonSet.OK_CANCEL);
-  if (r.getSelectedButton() !== ui.Button.OK) return;
-  const t = r.getResponseText().trim();
-  const p = PropertiesService.getScriptProperties();
-  if (!t) p.deleteProperty("URL_PUBLICA");
-  else if (/^https:\/\/script\.google\.com\/.*\/s\/[\w-]+\/(exec|dev)/.test(t)) p.setProperty("URL_PUBLICA", t.split("?")[0]);
-  else { ui.alert("Ese link no es de una aplicación web de Apps Script."); return; }
-  escribirConfig(config());
-  ui.alert("Listo. La hoja Configuración usa ahora: " + urlPublica());
 }
 
 function escribirConfig(cfg) {
