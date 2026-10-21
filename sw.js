@@ -1,4 +1,4 @@
-const CACHE = "bitacora-flota-v3";
+const CACHE = "bitacora-flota-1.0";
 const ARCHIVOS = [
   "./",
   "index.html",

@@ -5,6 +5,7 @@ const _q = [164, 52, 41, 18, 27, 6, 23, 125, 55, 37, 32, 46, 8, 9, 1, 86, 62, 24
 
 const ARCHIVO_DATOS = "Flota DIMER - datos (no borrar).json";
 const COLECCIONES = ["camiones", "registros", "fotos"];
+const VERSION = "1.0";
 const VERSION_DATOS = "2026-10-21";
 
 const FLOTA_INICIAL = [
@@ -144,6 +145,7 @@ function mostrarLinks() {
   const id = (/\/s\/([\w-]+)\/exec/.exec(url) || [])[1] || "";
   if (!URL_WEB && id.length < 60) console.log("Atención: este link puede ser el de prueba del editor. Copia el link de Implementar → Administrar implementaciones y escríbelo en const URL_WEB = \"…\" al inicio del código.");
   console.log([
+    "Bitácora de Flota · versión " + VERSION,
     "Link para los celulares: " + url + "?c=" + cfg.codigo,
     "Panel web: " + panel,
     "JSON: " + url + "?vista=json&c=" + cfg.codigo,
@@ -289,7 +291,7 @@ function doGet(e) {
       .addMetaTag("viewport", "width=device-width, initial-scale=1")
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
-  return salida({ app: "bitacora-flota", v: _q.length });
+  return salida({ app: "bitacora-flota", version: VERSION, v: _q.length });
 }
 
 function datosPanel(codigo) {

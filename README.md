@@ -1,4 +1,4 @@
-# Bitácora de Flota
+# Bitácora de Flota · versión 1.0
 
 App móvil para auditar las camionetas frigoríficas de la flota (Mitsubishi Fuso Canter 413, Kia Frontier 2,5, Hyundai Porter) y **panel web** con el estado de cada camión.
 

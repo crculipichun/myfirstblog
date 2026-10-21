@@ -346,6 +346,7 @@ const PAQUETES = {
 const codigoPaquete = nombre => { const m = /^(Preventivo|Correctivo) (\d+)/.exec(nombre || ""); return m ? m[1][0] + m[2] : ""; };
 const nombrePaquete = k => (k[0] === "C" ? "Correctivo " : "Preventivo ") + (k.slice(1) === "99" ? "(otro)" : k.slice(1));
 const TALLERES = ["Juan Nuñez", "RECC (Rodrigo Caro)", "Kaufmann", "Otro"];
+const VERSION_APP = "1.0";
 const MAX_FOTOS = 12;
 const LIMPIEZA = [["cabina", "Cabina (orden y limpieza)"], ["caja", "Caja frigorífica"], ["exterior", "Exterior y carrocería"], ["seguridad", "Extintor, triángulos y botiquín"]];
 const TIPOS_CAMION = ["Camioneta frigorífica", "Camión frigorífico", "Tracto camión", "Camión rígido", "Camión tolva", "Camión aljibe", "Camión pluma", "Furgón", "Semirremolque / rampla", "Otro"];
@@ -1248,7 +1249,8 @@ function vAjustes() {
   const { srvCard, pcPanel, adminCard } = tarjetasConexion();
   return `<div><button class="linkbtn" data-act="chofer-inicio">‹ Volver</button></div><h1>Ajustes</h1>
     ${EN_APK || Store.mode === "pc" ? "" : `<p class="muted" style="margin:0">Las auditorías se guardan en este teléfono.</p>`}
-    ${srvCard}${pcPanel}${adminCard}`;
+    ${srvCard}${pcPanel}${adminCard}
+    <p class="small muted" style="text-align:center;margin:0">Bitácora de Flota · versión ${VERSION_APP}</p>`;
 }
 
 function vPlanilla() {
@@ -1263,7 +1265,8 @@ function vPlanilla() {
     <div class="${UI.admin ? "grid2" : ""}" style="display:grid"><button class="btn" data-act="respaldo">Descargar respaldo</button>${UI.admin ? `<label class="btn" for="imp-json">Restaurar respaldo</label>` : ""}</div>
     <input id="imp-json" type="file" accept="application/json,.json" hidden>
     <span class="muted small">El respaldo (.json) sirve para pasar los datos a otro teléfono. Restaurar agrega o actualiza registros; no borra los existentes.</span>
-  </section>`;
+  </section>
+  <p class="small muted" style="text-align:center;margin:0">Bitácora de Flota · versión ${VERSION_APP}</p>`;
 }
 
 function verRegistro(id) {
