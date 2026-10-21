@@ -14,12 +14,24 @@ Si reportan una falla, eligen qué falla, la describen y dicen si la camioneta p
 
 ## Panel web
 
-Una página con todo lo importante de la flota, en el estilo de una tabla de indicadores: se ordena tocando el título de cada columna y cada celda se pinta en verde (mejor), ámbar (cerca) o rojo (peor que la mediana). Revisión técnica y permiso de circulación: verde vigente, amarillo claro si vencen en 31 a 60 días, amarillo fuerte si vencen en 30 días o menos y rojo si están vencidos. Mantención y auditorías se pintan según su vencimiento.
+Una página con todo lo importante de la flota: se ordena tocando el título de cada columna y al tocar un camión se ve su detalle. Solo tienen color:
+- **Revisión técnica y permiso de circulación:** verde vigente, amarillo claro si vencen en 31 a 60 días, amarillo fuerte si vencen en 30 días o menos, rojo si están vencidos.
+- **Fallas abiertas:** rojo claro si son leves, rojo fuerte si son graves (el camión no puede seguir trabajando, o severidad alta o crítica).
 - Resumen: operativos, detenidos, fallas abiertas, deshielo pendiente, mantención próxima, documentos vencidos y cuántos camiones tienen la auditoría semanal y mensual al día.
 - Tabla de camiones: odómetro, próxima mantención y km que faltan, revisión técnica, permiso de circulación, deshielo, fallas, última auditoría semanal y mensual, estado. Tocando un camión se ve su detalle y sus registros.
 - Listas de fallas abiertas, mantenciones (con las columnas de la planilla de mantenciones de la empresa) y auditorías.
 
 El link del panel está en la hoja **Configuración** de la planilla. Se actualiza solo cada 5 minutos.
+
+## Avisos por correo
+
+En la hoja **Configuración**, fila *Correos para avisos*, escribe los correos que deben recibirlos, separados por coma. Con **Bitácora → Enviar correo de prueba** se comprueba que lleguen. Los correos salen desde la cuenta de Google dueña de la planilla.
+
+- **Fallas nuevas:** apenas un chofer las envía (una sola vez por falla), marcadas como leves o graves.
+- **Documentos:** cuando a la revisión técnica o al permiso de circulación les quedan 30 días y cuando vencen.
+- **Mantención / cambio de aceite:** cuando faltan 1.000 km para la próxima mantención y cuando se pasa.
+
+Cada aviso se envía una sola vez; los de documentos y mantención se revisan con cada auditoría y además todos los días a las 8:00. La primera vez llega un solo correo con todo lo que ya esté por vencer o vencido.
 
 **Incrustarlo en Odoo:** en el sitio web de Odoo, *Editar → bloques → Código incrustado (Embed Code)* y pega el `<iframe …>` de la hoja Configuración. Para abrirlo desde un menú de Odoo, crea una *Acción de URL* con el link del panel. Para importar los datos a otro programa (Odoo, Power BI) está el link **JSON** de la misma hoja.
 

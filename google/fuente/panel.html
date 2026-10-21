@@ -32,7 +32,6 @@ h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--head); }
 .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; }
 .kpi b { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .kpi span { color: var(--muted); font-size: 12.5px; line-height: 1.25; }
-.kpi.bad b { color: var(--bad); } .kpi.warn b { color: var(--warn); } .kpi.ok b { color: var(--ok); }
 .tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
 .tools input { flex: 1 1 220px; max-width: 360px; min-height: 36px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; }
 .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-weight: 600; font-size: 13px; cursor: pointer; }
@@ -48,19 +47,18 @@ tbody tr:last-child td { border-bottom: 0; }
 tbody tr.fila { cursor: pointer; }
 tbody tr.fila:hover td { filter: brightness(.97); }
 tbody tr.sel td { box-shadow: inset 0 2px 0 var(--info), inset 0 -2px 0 var(--info); }
-td.c-ok { background: var(--ok-bg); } td.c-warn { background: var(--warn-bg); } td.c-bad { background: var(--bad-bg); }
 td.d-ok { background: #d6f0dd; color: #1d5e36; } td.d-am1 { background: #fff3b0; color: #6b5200; } td.d-am2 { background: #ffd84d; color: #4d3a00; font-weight: 600; } td.d-bad { background: #f6b3b3; color: #7a1418; font-weight: 600; }
+td.f-leve { background: #fde2e2; color: #8a1c20; } td.f-grave { background: #e45b5b; color: #fff; font-weight: 700; }
+td.f-grave .muted { color: inherit; }
 td[class*="d-"] .muted { color: inherit; opacity: .8; }
 .d-ok .ind { color: #1d7f47; } .d-am1 .ind, .d-am2 .ind { color: #8a6500; } .d-bad .ind { color: #a3161b; }
 .leyenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 6px; }
 .leyenda span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; background: var(--c); }
 .det-grid div.d-ok { background: #d6f0dd; } .det-grid div.d-am1 { background: #fff3b0; } .det-grid div.d-am2 { background: #ffd84d; } .det-grid div.d-bad { background: #f6b3b3; }
 .ind { font-size: 10px; margin-right: 3px; }
-.c-ok .ind { color: var(--ok); } .c-warn .ind { color: var(--warn); } .c-bad .ind { color: var(--bad); }
 td.txt { white-space: normal; min-width: 200px; max-width: 420px; text-align: left; }
 .plate { display: inline-block; border: 1.5px solid var(--head); border-radius: 4px; padding: 0 6px; font: 600 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .04em; background: #fff; color: #111; }
-.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
-.pill.ok { background: var(--ok-bg); color: var(--ok); } .pill.warn { background: var(--warn-bg); color: var(--warn); } .pill.bad { background: var(--bad-bg); color: var(--bad); } .pill.info { background: var(--info-bg); color: var(--info); }
+.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); }
 .muted { color: var(--muted); }
 .det { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; margin-top: 10px; }
 .det-top { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
@@ -78,8 +76,9 @@ td.txt { white-space: normal; min-width: 200px; max-width: 420px; text-align: le
   <section class="kpis" id="kpis"></section>
   <section>
     <h2>Camiones</h2>
-    <p class="nota">Toca el título de una columna para ordenar; toca una fila para ver el detalle. Color: verde mejor, ámbar cerca, rojo peor que la mediana de los camiones filtrados. Mantención y auditorías: verde al día, ámbar por vencer, rojo atrasada.</p>
+    <p class="nota">Toca el título de una columna para ordenar; toca una fila para ver el detalle.</p>
     <div class="leyenda"><b>Revisión técnica y permiso de circulación:</b><span style="--c:#d6f0dd">Vigente (más de 60 días)</span><span style="--c:#fff3b0">Vence en 31 a 60 días</span><span style="--c:#ffd84d">Vence en 30 días o menos</span><span style="--c:#f6b3b3">Vencido</span></div>
+    <div class="leyenda"><b>Fallas abiertas:</b><span style="--c:#fde2e2">Leve</span><span style="--c:#e45b5b">Grave (el camión no puede trabajar, o severidad alta o crítica)</span></div>
     <div class="tools"><input id="q" type="search" placeholder="Buscar por N°, patente o código" aria-label="Buscar camión"><span id="chips"></span></div>
     <div class="tabla" id="t-camiones"></div>
     <div id="detalle"></div>
@@ -100,44 +99,31 @@ const $ = s => document.querySelector(s);
 const esc = v => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const miles = n => n == null || n === "" ? "–" : Number(n).toLocaleString("es-CL");
 const fF = s => s && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10).split("-").reverse().join("-") : (s || "–");
-const pill = (t, nivel) => `<span class="pill ${nivel || ""}">${esc(t)}</span>`;
-const nivelEstado = e => e === "Detenido" ? "bad" : e === "Revisar" ? "warn" : "ok";
-const IND = { ok: "▲", warn: "■", bad: "▼", "d-ok": "●", "d-am1": "●", "d-am2": "▲", "d-bad": "✖" };
+const pill = t => `<span class="pill">${esc(t)}</span>`;
+const fallaColor = (graves, total) => !total ? null : graves ? ["f-grave", graves === 1 ? "1 falla grave" : graves + " fallas graves"] : ["f-leve", total === 1 ? "1 falla leve" : total + " fallas leves"];
+const IND = { "d-ok": "●", "d-am1": "●", "d-am2": "▲", "d-bad": "✖" };
 const docColor = d => d == null ? null : d < 0 ? ["d-bad", "vencido hace " + -d + " día" + (d === -1 ? "" : "s")] : d <= 30 ? ["d-am2", "vence en " + d + " día" + (d === 1 ? "" : "s")]
   : d <= 60 ? ["d-am1", "vence en " + d + " días"] : ["d-ok", "vigente, faltan " + d + " días"];
 
-function mediana(vals) {
-  const v = vals.filter(x => x != null && !isNaN(x)).sort((a, b) => a - b);
-  if (!v.length) return null;
-  const m = Math.floor(v.length / 2);
-  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
-}
-function contraMediana(v, med, mayorEsMejor) {
-  if (v == null || med == null) return null;
-  const tol = Math.max(Math.abs(med) * 0.1, 0.5);
-  if (Math.abs(v - med) <= tol) return ["warn", "cerca de la mediana"];
-  return (v > med) === mayorEsMejor ? ["ok", "mejor que la mediana"] : ["bad", "peor que la mediana"];
-}
-const porAntiguedad = (d, ok, aviso) => d == null ? ["bad", "nunca se ha hecho"] : d <= ok ? ["ok", "al día"] : d <= aviso ? ["warn", "por vencer"] : ["bad", "atrasada"];
 
 const COL_CAMIONES = [
   { t: "N°", izq: 1, v: c => c.interno, orden: c => { const m = /^([A-Z]*)(\d+)$/i.exec(String(c.interno)); return m ? (m[1] ? 1e6 : 0) + Number(m[2]) : 1e9; }, f: c => `<b>${esc(c.interno || "–")}</b>` },
   { t: "Patente", izq: 1, v: c => c.patente, f: c => `<span class="plate">${esc(c.patente)}</span>` },
   { t: "Vehículo", izq: 1, v: c => c.vehiculo, f: c => `${esc(c.vehiculo)} <span class="muted">${esc(c.anio)}</span>` },
-  { t: "Estado", izq: 1, v: c => ({ Detenido: 0, Revisar: 1, Operativo: 2 })[c.estado], f: c => pill(c.estado, nivelEstado(c.estado)) },
+  { t: "Estado", izq: 1, v: c => ({ Detenido: 0, Revisar: 1, Operativo: 2 })[c.estado], f: c => esc(c.estado) },
   { t: "Odómetro", v: c => c.km, f: c => c.km == null ? "–" : miles(c.km) + " km" },
   { t: "Km 30 días", v: c => c.km30, f: c => c.km30 == null ? "–" : miles(c.km30) },
-  { t: "Faltan mant.", v: c => c.faltaMant, color: c => c.faltaMant == null ? null : c.faltaMant <= 0 ? ["bad", "mantención atrasada"] : c.faltaMant <= 1000 ? ["warn", "mantención próxima"] : ["ok", "al día"],
+  { t: "Faltan mant.", v: c => c.faltaMant,
     f: c => c.faltaMant == null ? "–" : c.faltaMant <= 0 ? "atrasada " + miles(-c.faltaMant) : miles(c.faltaMant) + " km" },
   { t: "Rev. técnica", v: c => c.rt.dias, color: c => docColor(c.rt.dias), f: c => c.rt.vence ? `${fF(c.rt.vence)} <span class="muted">(${c.rt.dias < 0 ? "vencida" : c.rt.dias + " d"})</span>` : "sin dato" },
   { t: "Permiso circ.", v: c => c.permiso.dias, color: c => docColor(c.permiso.dias), f: c => c.permiso.vence ? `${fF(c.permiso.vence)} <span class="muted">(${c.permiso.dias < 0 ? "vencido" : c.permiso.dias + " d"})</span>` : "sin dato" },
-  { t: "Fallas abiertas", v: c => c.fallasAbiertas, color: c => c.fallasAbiertas === 0 ? ["ok", "sin fallas"] : ["bad", c.fallasAbiertas === 1 ? "1 falla" : c.fallasAbiertas + " fallas"], f: c => miles(c.fallasAbiertas) },
-  { t: "Fallas 90 días", v: c => c.fallas90, color: c => c.fallas90 === 0 ? ["ok", "sin fallas"] : ["bad", c.fallas90 === 1 ? "1 falla" : c.fallas90 + " fallas"], f: c => miles(c.fallas90) },
+  { t: "Fallas abiertas", v: c => c.fallasAbiertas, color: c => fallaColor(c.fallasGraves, c.fallasAbiertas), f: c => !c.fallasAbiertas ? "0" : miles(c.fallasAbiertas) + (c.fallasGraves ? " (" + c.fallasGraves + " grave" + (c.fallasGraves === 1 ? "" : "s") + ")" : " leve" + (c.fallasAbiertas === 1 ? "" : "s")) },
+  { t: "Fallas 90 días", v: c => c.fallas90, f: c => miles(c.fallas90) },
   { t: "Mant. 12 meses", v: c => c.mant12, f: c => miles(c.mant12) },
-  { t: "% limpieza", v: c => c.limpiezaPct, med: true, f: c => c.limpiezaPct == null ? "–" : c.limpiezaPct + " %" },
-  { t: "Últ. semanal", v: c => c.diasSemanal, color: c => porAntiguedad(c.diasSemanal, 7, 10), f: c => c.diasSemanal == null ? "nunca" : c.diasSemanal === 0 ? "hoy" : "hace " + c.diasSemanal + " d" },
-  { t: "Últ. mensual", v: c => c.diasMensual, color: c => porAntiguedad(c.diasMensual, 31, 40), f: c => c.diasMensual == null ? "nunca" : c.diasMensual === 0 ? "hoy" : "hace " + c.diasMensual + " d" },
-  { t: "Deshielo", v: c => c.deshielo ? 1 : 0, color: c => c.diasMensual == null ? null : c.deshielo ? ["bad", "necesita deshielo"] : ["ok", "no necesita"], f: c => c.diasMensual == null ? "–" : c.deshielo ? "necesita" : "no" }
+  { t: "% limpieza", v: c => c.limpiezaPct, f: c => c.limpiezaPct == null ? "–" : c.limpiezaPct + " %" },
+  { t: "Últ. semanal", v: c => c.diasSemanal, f: c => c.diasSemanal == null ? "nunca" : c.diasSemanal === 0 ? "hoy" : "hace " + c.diasSemanal + " d" },
+  { t: "Últ. mensual", v: c => c.diasMensual, f: c => c.diasMensual == null ? "nunca" : c.diasMensual === 0 ? "hoy" : "hace " + c.diasMensual + " d" },
+  { t: "Deshielo", v: c => c.deshielo ? 1 : 0, f: c => c.diasMensual == null ? "–" : c.deshielo ? "necesita" : "no" }
 ];
 
 function tabla(id, filas, cols, opts) {
@@ -150,18 +136,17 @@ function tabla(id, filas, cols, opts) {
       return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "es", { numeric: true })) * o.dir;
     });
   }
-  const meds = cols.map(c => c.med === undefined ? null : mediana(filas.map(c.v)));
   const head = cols.map((c, i) => `<th class="${c.izq ? "izq" : ""}" data-orden="${id}:${i}">${esc(c.t)}${o.i === i ? `<span class="flecha">${o.dir > 0 ? "▲" : "▼"}</span>` : ""}</th>`).join("");
   const cuerpo = filas.length ? filas.map(r => `<tr class="${opts.fila ? "fila" : ""} ${opts.sel && opts.sel(r) ? "sel" : ""}" ${opts.fila ? `data-id="${esc(r.id)}"` : ""}>${cols.map((c, i) => {
-    const col = c.color ? c.color(r) : c.med !== undefined ? contraMediana(c.v(r), meds[i], c.med) : null;
-    return `<td class="${c.izq ? "izq" : ""} ${c.txt ? "txt" : ""} ${col ? (col[0].startsWith("d-") ? col[0] : "c-" + col[0]) : ""}" ${col ? `title="${esc(col[1])}"` : ""}>${col ? `<span class="ind">${IND[col[0]]}</span>` : ""}${c.f ? c.f(r) : esc(c.v(r))}</td>`;
+    const col = c.color ? c.color(r) : null;
+    return `<td class="${c.izq ? "izq" : ""} ${c.txt ? "txt" : ""} ${col ? col[0] : ""}" ${col ? `title="${esc(col[1])}"` : ""}>${col && IND[col[0]] ? `<span class="ind">${IND[col[0]]}</span>` : ""}${c.f ? c.f(r) : esc(c.v(r))}</td>`;
   }).join("")}</tr>`).join("") : `<tr><td class="vacio" colspan="${cols.length}">${opts.vacio}</td></tr>`;
   $("#" + id).innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${cuerpo}</tbody></table>`;
 }
 
 function kpis() {
   const k = DATOS.kpi;
-  const t = (v, l, cls) => `<div class="kpi ${cls || ""}"><b>${v}</b><span>${l}</span></div>`;
+  const t = (v, l) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`;
   $("#kpis").innerHTML = [
     t(k.operativos + "/" + k.total, "Operativos", "ok"),
     t(k.detenidos, "Detenidos", k.detenidos ? "bad" : ""),
@@ -192,13 +177,13 @@ function detalle() {
   const nombres = { cabina: "Cabina", caja: "Caja frigorífica", exterior: "Exterior", seguridad: "Seguridad" };
   $("#detalle").innerHTML = `<div class="det">
     <div class="det-top"><b style="font-size:22px">N° ${esc(c.interno || "–")}</b><span class="plate" style="font-size:15px">${esc(c.patente)}</span><b>${esc(c.vehiculo)}</b>
-      <span class="muted">${esc(c.tipo)} ${esc(c.anio)}${c.codigoAnterior ? " · código anterior " + esc(c.codigoAnterior) : ""}</span>${pill(c.estado, nivelEstado(c.estado))}<span class="sp"></span><button class="btn" data-cerrar>Cerrar</button></div>
+      <span class="muted">${esc(c.tipo)} ${esc(c.anio)}${c.codigoAnterior ? " · código anterior " + esc(c.codigoAnterior) : ""}</span>${pill(c.estado)}<span class="sp"></span><button class="btn" data-cerrar>Cerrar</button></div>
     <div class="det-grid">
       <div><b>Odómetro</b>${c.km == null ? "–" : miles(c.km) + " km"}</div>
       <div><b>Próxima mantención</b>${c.proxMant == null ? "–" : miles(c.proxMant) + " km"}</div>
       <div class="${(docColor(c.rt.dias) || [""])[0]}"><b>Revisión técnica</b>${c.rt.fecha ? "Hecha " + esc(fF(c.rt.fecha)) + " · " : ""}vence ${esc(fF(c.rt.vence))}</div>
       <div class="${(docColor(c.permiso.dias) || [""])[0]}"><b>Permiso de circulación</b>${c.permiso.fecha ? "Pagado " + esc(fF(c.permiso.fecha)) + " · " : ""}vence ${esc(fF(c.permiso.vence))}</div>
-      <div><b>Última auditoría semanal</b>${s ? esc(fF(s.fecha)) + " · " + esc(s.responsable) + (l.length ? "<br>" + l.map(([k, v]) => esc(nombres[k] || k) + ": " + pill(v, v === "Mal" ? "bad" : v === "Regular" ? "warn" : "ok")).join(" ") : "") : "–"}</div>
+      <div><b>Última auditoría semanal</b>${s ? esc(fF(s.fecha)) + " · " + esc(s.responsable) + (l.length ? "<br>" + l.map(([k, v]) => esc(nombres[k] || k) + ": " + pill(v)).join(" ") : "") : "–"}</div>
       <div><b>Última auditoría mensual</b>${c.ultMensual ? esc(fF(c.ultMensual.fecha)) + " · " + esc(c.ultMensual.responsable) : "–"}</div>
     </div>
     <span class="muted">Las listas de abajo muestran solo este camión.</span></div>`;
@@ -207,8 +192,9 @@ function detalle() {
 const COL_FALLAS = [
   { t: "Fecha", izq: 1, v: f => f.fecha, f: f => fF(f.fecha) }, { t: "N°", izq: 1, v: f => f.interno, f: f => `<b>${esc(f.interno || "–")}</b>` },
   { t: "Patente", izq: 1, v: f => f.patente, f: f => `<span class="plate">${esc(f.patente)}</span>` }, { t: "Sistema", izq: 1, v: f => f.sistema },
-  { t: "Descripción", izq: 1, txt: 1, v: f => f.descripcion || "–" }, { t: "Detenido", izq: 1, v: f => f.detenido ? 1 : 0, color: f => f.detenido ? ["bad", "camión detenido"] : null, f: f => f.detenido ? "sí" : "no" },
-  { t: "Estado", izq: 1, v: f => f.estado, f: f => pill(f.estado, f.estado === "Cerrado" ? "ok" : "warn") }, { t: "Origen", izq: 1, v: f => f.origen }, { t: "Reportó", izq: 1, v: f => f.responsable }
+  { t: "Descripción", izq: 1, txt: 1, v: f => f.descripcion || "–" }, { t: "Gravedad", izq: 1, v: f => f.grave ? 1 : 0, color: f => f.estado === "Cerrado" ? null : f.grave ? ["f-grave", "falla grave"] : ["f-leve", "falla leve"], f: f => f.grave ? "Grave" : "Leve" },
+  { t: "Detenido", izq: 1, v: f => f.detenido ? 1 : 0, f: f => f.detenido ? "sí" : "no" },
+  { t: "Estado", izq: 1, v: f => f.estado, f: f => pill(f.estado) }, { t: "Origen", izq: 1, v: f => f.origen }, { t: "Reportó", izq: 1, v: f => f.responsable }
 ];
 const LISTAS = {
   fallas: { t: "Fallas abiertas", n: "Fallas reportadas en auditorías o por el administrador que todavía no se cierran.", filas: () => DATOS.fallas.filter(f => f.estado !== "Cerrado"), cols: COL_FALLAS },
@@ -216,11 +202,11 @@ const LISTAS = {
   mantenciones: { t: "Mantenciones", n: "Mantenciones del historial de la empresa y las informadas en las auditorías mensuales.", filas: () => DATOS.mantenciones, cols: [
     { t: "Entrada", izq: 1, v: m => m.fecha, f: m => fF(m.fecha) }, { t: "Salida", izq: 1, v: m => m.salida, f: m => fF(m.salida) },
     { t: "N°", izq: 1, v: m => m.interno, f: m => `<b>${esc(m.interno || "–")}</b>` }, { t: "Patente", izq: 1, v: m => m.patente, f: m => `<span class="plate">${esc(m.patente)}</span>` },
-    { t: "Taller", izq: 1, v: m => m.taller }, { t: "Tipo", izq: 1, v: m => m.tipo, f: m => pill(m.tipo, m.tipo === "Correctivo" ? "warn" : "info") },
+    { t: "Taller", izq: 1, v: m => m.taller }, { t: "Tipo", izq: 1, v: m => m.tipo, f: m => pill(m.tipo) },
     { t: "Km", v: m => m.km, f: m => miles(m.km) }, { t: "Paquete", izq: 1, v: m => m.paquete }, { t: "Servicio", izq: 1, txt: 1, v: m => m.servicio },
     { t: "Causas y observaciones", izq: 1, txt: 1, v: m => m.obs }] },
   auditorias: { t: "Auditorías", n: "Auditorías semanales y mensuales enviadas por los choferes.", filas: () => DATOS.auditorias, cols: [
-    { t: "Fecha", izq: 1, v: a => a.fecha, f: a => fF(a.fecha) }, { t: "Tipo", izq: 1, v: a => a.tipo, f: a => pill(a.tipo, a.tipo === "Semanal" ? "info" : "") },
+    { t: "Fecha", izq: 1, v: a => a.fecha, f: a => fF(a.fecha) }, { t: "Tipo", izq: 1, v: a => a.tipo, f: a => pill(a.tipo) },
     { t: "N°", izq: 1, v: a => a.interno, f: a => `<b>${esc(a.interno || "–")}</b>` }, { t: "Patente", izq: 1, v: a => a.patente, f: a => `<span class="plate">${esc(a.patente)}</span>` },
     { t: "Odómetro", v: a => a.km, f: a => miles(a.km) }, { t: "Responsable", izq: 1, v: a => a.responsable }, { t: "Detalle", izq: 1, txt: 1, v: a => a.detalle },
     { t: "Fallas", izq: 1, txt: 1, v: a => a.fallasResumen || "–" }] }

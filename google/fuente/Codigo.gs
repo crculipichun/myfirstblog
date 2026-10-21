@@ -21,7 +21,7 @@ const DOCS = [["vRevision", "Revisión técnica", "rtFecha"], ["vPermiso", "Perm
 const LIMPIEZA = [["cabina", "Cabina"], ["caja", "Caja frigorífica"], ["exterior", "Exterior"], ["seguridad", "Elementos de seguridad"]];
 
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu("Bitácora").addItem("Instalar o actualizar", "instalar").addToUi();
+  SpreadsheetApp.getUi().createMenu("Bitácora").addItem("Instalar o actualizar", "instalar").addItem("Enviar correo de prueba", "probarCorreo").addToUi();
 }
 
 function instalar() {
@@ -33,6 +33,8 @@ function instalar() {
   guardar(datos);
   quitarHojasAntiguas();
   escribirConfig(cfg);
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === "avisoDiario").forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger("avisoDiario").timeBased().everyDays(1).atHour(8).create();
 }
 
 const norm = p => String(p || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -83,8 +85,9 @@ function escribirConfig(cfg) {
   const url = ScriptApp.getService().getUrl();
   const falta = "Primero implementa el script como aplicación web (paso 2) y vuelve a usar Bitácora → Instalar o actualizar.";
   const panel = url ? url + "?vista=panel&c=" + cfg.codigo : falta;
+  const previos = textoCorreos();
   h.clear();
-  h.getRange(1, 1, 8, 2).setValues([
+  h.getRange(1, 1, 9, 2).setValues([
     ["Bitácora de Flota", ""],
     ["Link para los celulares (pégalo en la app: Ajustes y conexión)", url ? url + "?c=" + cfg.codigo : falta],
     ["Panel web (ábrelo en el navegador o incrústalo en Odoo)", panel],
@@ -92,12 +95,98 @@ function escribirConfig(cfg) {
     ["Datos en JSON para otros programas (Odoo, Power BI…)", url ? url + "?vista=json&c=" + cfg.codigo : falta],
     ["Código de acceso", cfg.codigo],
     ["PIN de administrador (agrega y edita camiones; no lo compartas)", cfg.pin],
-    ["Para cambiar el código o el PIN", "Apps Script → Configuración del proyecto → Propiedades del script: CODIGO y PIN"]
+    ["Para cambiar el código o el PIN", "Apps Script → Configuración del proyecto → Propiedades del script: CODIGO y PIN"],
+    [FILA_CORREOS, previos]
   ]);
+  h.getRange("B9").setBackground("#fff3b0").setNote("Escribe aquí los correos que reciben los avisos, separados por coma.");
   h.getRange("A1").setFontSize(14).setFontWeight("bold");
-  h.getRange("A2:A8").setFontWeight("bold");
+  h.getRange("A2:A9").setFontWeight("bold");
   h.setColumnWidth(1, 420); h.setColumnWidth(2, 720);
-  h.getRange("B2:B8").setWrap(true);
+  h.getRange("B2:B9").setWrap(true);
+}
+
+const FILA_CORREOS = "Correos para avisos (separados por coma)";
+
+function textoCorreos() {
+  const h = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_CONFIG);
+  if (!h || h.getLastRow() < 1) return "";
+  const fila = h.getRange(1, 1, h.getLastRow(), 2).getValues().find(f => f[0] === FILA_CORREOS);
+  return fila ? String(fila[1] || "") : "";
+}
+
+function correosAvisos() {
+  return textoCorreos().split(/[,;\s]+/).map(x => x.trim()).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
+}
+
+const esGrave = r => !!r.detenido || /alta|cr[ií]tica|grave/i.test(r.severidad || "");
+
+function enviarCorreo(asunto, filas, intro) {
+  const para = correosAvisos();
+  if (!para.length) return false;
+  const url = ScriptApp.getService().getUrl();
+  const panel = url ? url + "?vista=panel&c=" + config().codigo : "";
+  const celda = "padding:8px 10px;border-bottom:1px solid #e3e8ec;text-align:left;font:14px Arial,sans-serif";
+  const html = '<div style="font:14px Arial,sans-serif;color:#26313b"><h2 style="color:#3c4650;margin:0 0 8px">' + asunto + "</h2><p>" + intro + "</p>" +
+    '<table style="border-collapse:collapse"><tr>' + ["N°", "Patente", "Aviso", "Detalle"].map(t => '<th style="' + celda + ';color:#6b7783">' + t + "</th>").join("") + "</tr>" +
+    filas.map(f => '<tr style="background:' + (f.fondo || "#fff") + '">' + [f.interno, f.patente, f.aviso, f.detalle].map(x => '<td style="' + celda + '">' + escHtml(x) + "</td>").join("") + "</tr>").join("") +
+    "</table>" + (panel ? '<p><a href="' + panel + '">Abrir el panel de flota</a></p>' : "") + "</div>";
+  try { MailApp.sendEmail({ to: para.join(","), subject: "Flota DIMER: " + asunto, htmlBody: html, name: "Flota DIMER" }); return true; }
+  catch (err) { console.error("No se pudo enviar el aviso: " + err); return false; }
+}
+
+function escHtml(x) { return String(x == null ? "" : x).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+const fFecha = s => s && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10).split("-").reverse().join("-") : (s || "");
+const fKm = x => n(x) === null ? "" : Math.round(x).toLocaleString("es-CL") + " km";
+
+function avisarFallasNuevas(nuevas, datos) {
+  if (!nuevas.length) return;
+  const C = calculos(datos), graves = nuevas.filter(esGrave).length;
+  const filas = nuevas.map(r => ({ interno: C.interno(r), patente: C.pat(r), aviso: esGrave(r) ? "Falla grave" : "Falla leve", fondo: esGrave(r) ? "#f6b3b3" : "#fde2e2",
+    detalle: [r.sistema, r.descripcion, r.detenido ? "camión detenido" : "", r.responsable ? "reportó " + r.responsable : "", fFecha(r.fecha)].filter(Boolean).join(" · ") }));
+  enviarCorreo(nuevas.length === 1 ? "falla reportada" + (graves ? " (grave)" : "") : nuevas.length + " fallas reportadas" + (graves ? " (" + graves + (graves === 1 ? " grave)" : " graves)") : ""), filas,
+    "Se reportaron estas fallas en las auditorías de recién.");
+}
+
+function revisarVencimientos(datos) {
+  if (!correosAvisos().length) return;
+  const C = calculos(datos), p = PropertiesService.getScriptProperties();
+  let hechos = {}; try { hechos = JSON.parse(p.getProperty("AVISADOS") || "{}"); } catch (err) { hechos = {}; }
+  const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd"), filas = [], claves = [];
+  const nuevo = (clave, fila) => { if (hechos[clave]) return; claves.push(clave); filas.push(fila); };
+  datos.camiones.slice().sort(ordenInterno).forEach(c => {
+    const base = { interno: v(c.interno), patente: patente(c.patente) };
+    DOCS.slice(0, 2).forEach(([k, nombre]) => {
+      const vence = C.docDe(c, k), e = C.estadoDoc(vence);
+      if (e.dias === null) return;
+      const etapa = e.dias < 0 ? "vencido" : e.dias <= 30 ? "30" : null;
+      if (etapa) nuevo(["doc", c.id, k, vence, etapa].join("|"), Object.assign({}, base, { aviso: nombre + (etapa === "vencido" ? " vencido" : " por vencer"),
+        fondo: etapa === "vencido" ? "#f6b3b3" : "#ffd84d", detalle: (etapa === "vencido" ? "Venció el " : "Vence el ") + fFecha(vence) + (etapa === "vencido" ? "" : " (faltan " + e.dias + " días)") }));
+    });
+    const mt = C.mantencion(c);
+    if (mt.prox !== null) {
+      const etapa = mt.falta <= 0 ? "pasada" : mt.falta <= 1000 ? "1000" : null;
+      if (etapa) nuevo(["mant", c.id, mt.prox, etapa].join("|"), Object.assign({}, base, { aviso: etapa === "pasada" ? "Mantención atrasada" : "Mantención próxima",
+        detalle: "Cambio de aceite / mantención a los " + fKm(mt.prox) + " · odómetro " + fKm(C.kmDe(c)) + (etapa === "pasada" ? " · pasada por " + fKm(-mt.falta) : " · faltan " + fKm(mt.falta)) }));
+    }
+    const ac = C.aceite(c);
+    if (ac.u && n(ac.u.proximoKm) !== null && ac.rest <= 1000)
+      nuevo(["aceite", c.id, ac.u.proximoKm, ac.rest <= 0 ? "pasado" : "1000"].join("|"), Object.assign({}, base, { aviso: ac.rest <= 0 ? "Cambio de aceite atrasado" : "Cambio de aceite próximo",
+        detalle: "Próximo cambio a los " + fKm(ac.u.proximoKm) + " · odómetro " + fKm(C.kmDe(c)) }));
+  });
+  if (!filas.length) return;
+  if (!enviarCorreo(filas.length === 1 ? "1 aviso de documentos o mantención" : filas.length + " avisos de documentos o mantención", filas,
+    "Estos documentos o mantenciones necesitan atención. Cada aviso se envía una sola vez.")) return;
+  claves.forEach(k => { hechos[k] = hoy; });
+  const limite = Utilities.formatDate(new Date(Date.now() - 400 * 864e5), Session.getScriptTimeZone(), "yyyy-MM-dd");
+  Object.keys(hechos).forEach(k => { if (hechos[k] < limite) delete hechos[k]; });
+  p.setProperty("AVISADOS", JSON.stringify(hechos));
+}
+
+function avisoDiario() { revisarVencimientos(leer()); }
+
+function probarCorreo() {
+  const ok = enviarCorreo("correo de prueba", [{ interno: "–", patente: "–", aviso: "Prueba", detalle: "Si recibes este correo, los avisos de la flota están funcionando." }], "Correo de prueba de los avisos de la flota.");
+  SpreadsheetApp.getUi().alert(ok ? "Correo enviado a: " + correosAvisos().join(", ") : "Escribe al menos un correo en la hoja Configuración, fila «" + FILA_CORREOS + "».");
 }
 
 function doGet(e) {
@@ -140,7 +229,7 @@ function doPost(e) {
   try {
     const datos = leer();
     let rechazados = 0;
-    const cambios = Array.isArray(req.cambios) ? req.cambios : [];
+    const cambios = Array.isArray(req.cambios) ? req.cambios : [], fallasNuevas = [];
     cambios.forEach(c => {
       if (COLECCIONES.indexOf(c.col) < 0) return;
       if (c.col === "camiones" && !admin) { rechazados++; return; }
@@ -148,10 +237,13 @@ function doPost(e) {
       const id = c.op === "set" ? c.doc && c.doc.id : c.id;
       if (typeof id !== "string") return;
       const i = arr.findIndex(x => x.id === id);
-      if (c.op === "set") { if (i >= 0) arr[i] = c.doc; else arr.push(c.doc); }
+      if (c.op === "set") { if (i >= 0) arr[i] = c.doc; else { arr.push(c.doc); if (c.col === "registros" && c.doc.tipo === "falla") fallasNuevas.push(c.doc); } }
       else if (c.op === "delete" && i >= 0) arr.splice(i, 1);
     });
-    if (cambios.length) guardar(datos);
+    if (cambios.length) {
+      guardar(datos);
+      try { avisarFallasNuevas(fallasNuevas, datos); revisarVencimientos(datos); } catch (err) { console.error(err); }
+    }
     return salida({
       datos: datos, admin: admin, rechazados: rechazados,
       planilla: { planilla: SpreadsheetApp.getActiveSpreadsheet().getUrl(), ultima: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss"), pendiente: false }
@@ -295,7 +387,7 @@ function resumen(d) {
       mant12: desde(365)(C.regs).filter(r => ["mantencion", "preventiva", "correctiva"].indexOf(r.tipo) >= 0).length,
       diasSemanal: dias(sem), diasMensual: dias(men),
       limpiezaPct: lim.length ? Math.round(lim.filter(x => x === "Bien").length / lim.length * 100) : null,
-      deshielo: C.deshielo(c), fallasAbiertas: C.abiertas(c.id).length, estado: C.estado(c),
+      deshielo: C.deshielo(c), fallasAbiertas: C.abiertas(c.id).length, fallasGraves: C.abiertas(c.id).filter(esGrave).length, estado: C.estado(c),
       ultSemanal: sem ? { fecha: sem.fecha, responsable: v(sem.responsable), limpieza: sem.limpieza || {} } : null,
       ultMensual: men ? { fecha: men.fecha, responsable: v(men.responsable) } : null
     };
@@ -314,7 +406,7 @@ function resumen(d) {
     },
     camiones: camiones,
     fallas: C.regs.filter(r => r.tipo === "falla").map(r => ({ fecha: r.fecha, interno: C.interno(r), patente: C.pat(r), camionId: r.camionId, sistema: v(r.sistema), descripcion: v(r.descripcion),
-      detenido: !!r.detenido, estado: v(r.estado), origen: r.origen || "Registro", responsable: v(r.responsable) })),
+      detenido: !!r.detenido, grave: esGrave(r), estado: v(r.estado), origen: r.origen || "Registro", responsable: v(r.responsable) })),
     mantenciones: C.mantenciones(),
     auditorias: C.regs.filter(r => r.tipo === "semanal" || r.tipo === "auditoria").slice(0, 400).map(r => ({ fecha: r.fecha, tipo: r.tipo === "semanal" ? "Semanal" : "Mensual",
       interno: C.interno(r), patente: C.pat(r), camionId: r.camionId, km: n(r.km), responsable: v(r.responsable), detalle: titulo(r), fallasResumen: v(r.fallasResumen) }))
