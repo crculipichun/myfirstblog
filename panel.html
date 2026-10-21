@@ -251,6 +251,14 @@ function jsonp(url) {
 }
 
 async function actualizar() {
+  if (window.google && google.script && google.script.run) {
+    $("#btn-act").textContent = "Actualizando…";
+    google.script.run
+      .withSuccessHandler(d => { DATOS = d; aviso(""); $("#btn-act").textContent = "Actualizar"; pintar(); })
+      .withFailureHandler(e => { aviso("No se pudo actualizar: " + (e && e.message || "")); $("#btn-act").textContent = "Actualizar"; })
+      .datosPanel(CODIGO);
+    return;
+  }
   if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(SERVIDOR) || !CODIGO) { aviso("Falta el link del script y el código de acceso: escríbelos en SERVIDOR_FIJO y CODIGO_FIJO dentro de este archivo."); return; }
   $("#btn-act").textContent = "Actualizando…";
   try {
@@ -276,7 +284,7 @@ document.addEventListener("click", e => {
   if (e.target.closest("#btn-act")) actualizar();
 });
 $("#q").addEventListener("input", e => { UI.q = e.target.value; camiones(); });
-actualizar();
+if (DATOS) pintar(); else actualizar();
 setInterval(actualizar, 5 * 60 * 1000);
 </script>
 </body>
