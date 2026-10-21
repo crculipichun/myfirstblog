@@ -72,6 +72,7 @@ Para volver a generar el APK (Linux o macOS, con Java 17+, Python 3 y npm): `and
 ## Archivos
 
 - `index.html` – toda la app (HTML, CSS y JS)
+- `panel.html` – panel web (se publica con GitHub Pages y lee los datos del script)
 - `google/Codigo.gs` – script de Google con el panel web y los avisos
 - `sw.js` – service worker para uso sin conexión
 - `manifest.webmanifest`, `icon.svg`, `icon-*.png` – instalación como app

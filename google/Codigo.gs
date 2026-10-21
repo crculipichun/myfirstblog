@@ -140,10 +140,11 @@ function instalar() {
 function mostrarLinks() {
   const cfg = config(), url = urlPublica();
   if (!url) { console.log("Primero haz Implementar → Nueva implementación → Aplicación web, y vuelve a ejecutar instalar."); return; }
-  const panel = url + "?vista=panel&c=" + cfg.codigo;
+  const panel = "https://crculipichun.github.io/myfirstblog/panel.html?u=" + encodeURIComponent(url) + "&c=" + cfg.codigo;
   console.log([
     "Link para los celulares: " + url + "?c=" + cfg.codigo,
     "Panel web: " + panel,
+    "Panel web (alternativo, desde Google): " + url + "?vista=panel&c=" + cfg.codigo,
     "Para Odoo: <iframe src=\"" + panel + "\" style=\"width:100%;height:1600px;border:0\"></iframe>",
     "JSON: " + url + "?vista=json&c=" + cfg.codigo,
     "Código de acceso: " + cfg.codigo,
@@ -204,7 +205,7 @@ function enviarCorreo(asunto, filas, intro) {
   const para = correosAvisos();
   if (!para.length) return false;
   const url = urlPublica();
-  const panel = url ? url + "?vista=panel&c=" + config().codigo : "";
+  const panel = url ? "https://crculipichun.github.io/myfirstblog/panel.html?u=" + encodeURIComponent(url) + "&c=" + config().codigo : "";
   const celda = "padding:8px 10px;border-bottom:1px solid #e3e8ec;text-align:left;font:14px Arial,sans-serif";
   const html = '<div style="font:14px Arial,sans-serif;color:#26313b"><h2 style="color:#3c4650;margin:0 0 8px">' + asunto + "</h2><p>" + intro + "</p>" +
     '<table style="border-collapse:collapse"><tr>' + ["N°", "Patente", "Aviso", "Detalle"].map(t => '<th style="' + celda + ';color:#6b7783">' + t + "</th>").join("") + "</tr>" +
