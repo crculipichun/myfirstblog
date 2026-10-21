@@ -277,10 +277,12 @@ function doGet(e) {
   if (q.vista === "panel" || q.vista === "json") {
     if (!igual(q.c, config().codigo)) {
       Utilities.sleep(1000);
+      if (q.vista === "json" && /^[A-Za-z_$][\w$]{0,40}$/.test(q.callback || "")) return ContentService.createTextOutput(q.callback + "(" + JSON.stringify({ error: "codigo" }) + ");").setMimeType(ContentService.MimeType.JAVASCRIPT);
       return q.vista === "json" ? salida({ error: "codigo" })
         : HtmlService.createHtmlOutput("<p style='font:16px system-ui;padding:24px'>Falta el código de acceso en el link (…&amp;c=CODIGO). Pídeselo al administrador.</p>");
     }
     const r = resumen(leer());
+    if (q.vista === "json" && /^[A-Za-z_$][\w$]{0,40}$/.test(q.callback || "")) return ContentService.createTextOutput(q.callback + "(" + JSON.stringify(r) + ");").setMimeType(ContentService.MimeType.JAVASCRIPT);
     if (q.vista === "json") return salida(r);
     const datosJs = JSON.stringify(r).replace(/</g, "\\u003c"), codigoJs = JSON.stringify(String(q.c)).replace(/</g, "\\u003c");
     const html = PANEL_HTML.replace("__DATOS__", () => datosJs).replace("__CODIGO__", () => codigoJs);

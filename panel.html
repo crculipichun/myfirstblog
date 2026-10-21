@@ -237,17 +237,31 @@ function pintar() {
 
 function aviso(t) { $("#msg").innerHTML = t ? `<div class="err">${esc(t)}</div>` : ""; }
 
+function jsonp(url) {
+  return new Promise((ok, mal) => {
+    const nombre = "_p" + Date.now(), s = document.createElement("script");
+    const fin = () => { delete window[nombre]; s.remove(); clearTimeout(t); };
+    const t = setTimeout(() => { fin(); mal(new Error("tiempo")); }, 20000);
+    window[nombre] = d => { fin(); ok(d); };
+    s.onerror = () => { fin(); mal(new Error("red")); };
+    s.src = url + "&callback=" + nombre;
+    document.head.appendChild(s);
+  });
+}
+
 async function actualizar() {
   if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(SERVIDOR) || !CODIGO) { aviso("Falta el link del script y el código de acceso: escríbelos en SERVIDOR_FIJO y CODIGO_FIJO dentro de este archivo."); return; }
   $("#btn-act").textContent = "Actualizando…";
   try {
-    const r = await fetch(SERVIDOR + "?vista=json&c=" + encodeURIComponent(CODIGO), { redirect: "follow" });
-    const d = await r.json();
+    const base = SERVIDOR + "?vista=json&c=" + encodeURIComponent(CODIGO);
+    let d;
+    try { d = await (await fetch(base, { redirect: "follow" })).json(); }
+    catch (e1) { d = await jsonp(base); }
     if (d.error === "codigo") { aviso("El código de acceso del link no es correcto."); return; }
     if (!d.camiones) { aviso("El script no devolvió los datos del panel. Revisa que esté implementado con la última versión."); return; }
     DATOS = d; guardarLocal("panel_u", SERVIDOR); guardarLocal("panel_c", CODIGO); aviso(""); pintar();
   } catch (e) {
-    aviso("No se pudo conectar con el script. Revisa tu conexión a internet y que el link del script esté bien.");
+    aviso("No se pudo conectar con el script. Revisa que la implementación tenga acceso para «Cualquier usuario» y que el link sea el de Implementar → Administrar implementaciones.");
   } finally { $("#btn-act").textContent = "Actualizar"; }
 }
 
