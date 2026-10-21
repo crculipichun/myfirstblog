@@ -142,6 +142,8 @@ function mostrarLinks() {
   const cfg = config(), url = urlPublica();
   if (!url) { console.log("Primero haz Implementar → Nueva implementación → Aplicación web, y vuelve a ejecutar instalar."); return; }
   const panel = PANEL_WEB || url + "?vista=panel&c=" + cfg.codigo;
+  const id = (/\/s\/([\w-]+)\/exec/.exec(url) || [])[1] || "";
+  if (!URL_WEB && id.length < 60) console.log("Atención: este link puede ser el de prueba del editor. Copia el link de Implementar → Administrar implementaciones y escríbelo en const URL_WEB = \"…\" al inicio del código.");
   console.log([
     "Link para los celulares: " + url + "?c=" + cfg.codigo,
     "Panel web: " + panel,
