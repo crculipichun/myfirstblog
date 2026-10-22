@@ -20,14 +20,12 @@ fi
 sed -e "s#const SERVIDOR_FIJO = \"\", CODIGO_FIJO = \"\";#const SERVIDOR_FIJO = \"${SERVIDOR:-}\", CODIGO_FIJO = \"${CODIGO:-}\";#" \
     ../index.html > "$B/assets/www/index.html"
 cp ../icon.svg "$B/assets/www/"
-sed -e "s#const SERVIDOR_FIJO = \"\", CODIGO_FIJO = \"\";#const SERVIDOR_FIJO = \"${SERVIDOR:-}\", CODIGO_FIJO = \"${CODIGO:-}\";#" \
-    ../panel.html > "$B/assets/www/panel.html"
 cp ../icon-192.png "$B/res/mipmap-xxxhdpi/ic_launcher.png"
 cp -r res/values "$B/res/"
 
 "$H/aapt2" compile --dir "$B/res" -o "$B/res.zip"
 "$H/aapt2" link -o "$B/base.apk" -I "$H/android-all.jar" --manifest AndroidManifest.xml -A "$B/assets" \
-  --min-sdk-version 24 --target-sdk-version 34 --version-code "${VERSION_CODE:-21}" --version-name "${VERSION_NAME:-1.0}" "$B/res.zip"
+  --min-sdk-version 24 --target-sdk-version 34 --version-code "${VERSION_CODE:-22}" --version-name "${VERSION_NAME:-1.0}" "$B/res.zip"
 
 javac -nowarn -Xlint:-options --release 8 -cp "$H/android-all.jar" -d "$B/clases" src/cl/bitacoraflota/*.java
 java -cp "$H/dx.jar" com.android.dx.command.Main --dex --min-sdk-version=24 --output="$B/classes.dex" "$B/clases"

@@ -498,13 +498,13 @@ const Store = {
       for (const c of this.camiones.filter(x => !x.ejemplo)) this.outbox.push({ col: "camiones", op: "set", doc: c });
       sset("bf_outbox", JSON.stringify(this.outbox));
     }
-    await this.sync(); toast(this.pc.conectado ? "Conectado al panel" : "No se pudo conectar con el panel");
+    await this.sync(); toast(this.pc.conectado ? "Conectado a la planilla" : "No se pudo conectar con la planilla");
   },
   async guardarCodigo(codigo) {
     codigo = String(codigo || "").trim().toUpperCase();
     if (!codigo) { toast("Escribe el código de acceso."); return; }
     sset("bf_codigo", codigo); await this.sync();
-    toast(this.pc.codigoMal ? "El código de acceso no es correcto." : "Código guardado. Conectado al panel.");
+    toast(this.pc.codigoMal ? "El código de acceso no es correcto." : "Código guardado. Conectado a la planilla.");
   },
   cargarLocal() {
     try { const raw = sget("bf_data"); if (raw) { const d = JSON.parse(raw); this.camiones = d.camiones || []; this.registros = d.registros || []; } } catch {}
@@ -594,8 +594,8 @@ function explicarError(e) {
     noexiste: "Google no encontró el script. Revisa que el link esté copiado completo, sin cambiar letras.",
     html: "Google respondió una página en vez de datos. Revisa el link y que el script esté implementado como aplicación web.",
     red: g ? "No llegó respuesta de Google. Pasa cuando no hay señal, cuando el link tiene una letra distinta, o cuando «Quién tiene acceso» no es «Cualquier usuario»." : "No llegó respuesta. Revisa la señal y el link.",
-    tiempo: "El panel tardó demasiado en responder. Intenta de nuevo.",
-    http: "El panel respondió con error " + (e && e.status) + "."
+    tiempo: "La planilla tardó demasiado en responder. Intenta de nuevo.",
+    http: "La planilla respondió con error " + (e && e.status) + "."
   })[m] || ("Error: " + (e && e.message || "desconocido"));
 }
 
@@ -608,7 +608,7 @@ async function entrarAdmin(pin) {
   pin = String(pin || "").trim();
   if (Store.mode === "pc") {
     const r = await Store.api("admin", { pin }).catch(() => null);
-    if (!r) { toast("No hay conexión con el panel. Revisa la señal e intenta de nuevo."); return; }
+    if (!r) { toast("No hay conexión con la planilla. Revisa la señal e intenta de nuevo."); return; }
     if (!r.ok) { toast("PIN incorrecto. Pregúntalo al administrador."); return; }
     sset("bf_pin", pin); UI.admin = true;
   } else {
@@ -753,7 +753,7 @@ function render() {
 const ejemploBanner = () => Store.camiones.some(c => c.ejemplo)
   ? `<div class="banner"><span>Estás viendo datos de ejemplo.</span>${UI.admin ? `<button class="btn sm" data-act="borrar-ejemplos">Borrar ejemplos</button>` : ""}</div>` : "";
 const apkBanner = () => EN_APK && Store.mode !== "pc"
-  ? `<div class="banner"><span>Conecta la app al panel para que las auditorías lleguen a la oficina.</span><button class="btn sm" data-nav-link="planilla">Conectar</button></div>`
+  ? `<div class="banner"><span>Conecta la app a la planilla para que las auditorías lleguen a la oficina.</span><button class="btn sm" data-nav-link="planilla">Conectar</button></div>`
   : Store.mode === "pc" && Store.pc.codigoMal
   ? `<div class="banner"><span>Falta el código de acceso: los registros quedan en este teléfono hasta ingresarlo.</span><button class="btn sm" data-nav-link="planilla">Ingresar código</button></div>` : "";
 
@@ -1063,16 +1063,16 @@ function vHistorial() {
 
 function tarjetasConexion() {
   const P = Store.pc, G = Store.esGoogle(), donde = "Apps Script, al ejecutar instalar";
-  const panelUrl = G ? "panel.html?u=" + encodeURIComponent(Store.base()) + "&c=" + encodeURIComponent(codigoAcceso()) : "";
+  const planillaUrl = /^https:\/\/docs\.google\.com\//.test(P.planilla || "") ? P.planilla : "";
   const pcPanel = Store.mode !== "pc" ? "" : `<div class="panel" style="padding:16px;display:grid;gap:10px">
     <div class="spread"><h3>Envío de datos</h3><span class="pill ${!P.conectado ? "warn" : "ok"}">${!P.conectado ? "Sin conexión" : "Al día"}</span></div>
     <span class="small muted">${!P.conectado
       ? `<b>No se pudo enviar.</b> ${P.ultimoError ? esc(P.ultimoError) + " " : ""}${Store.outbox.length ? `${Store.outbox.length} cambio${Store.outbox.length === 1 ? "" : "s"} esperando; se enviarán solos cuando haya conexión.` : "Los registros nuevos quedarán guardados en este teléfono hasta reconectar."} Revisa que el celular tenga internet.`
-      : `Cada registro llega solo al panel.${P.ultima ? " Último envío: " + esc(P.ultima.replace("T", " ")) : ""}`}</span>
-    <div class="${UI.admin && panelUrl ? "grid2" : ""}" style="display:grid"><button class="btn" data-act="sync">Enviar ahora</button>${UI.admin && panelUrl ? `<a class="btn primary" href="${esc(panelUrl)}" target="_blank" rel="noopener">Abrir panel web</a>` : ""}</div></div>`;
+      : `Cada registro llega solo a la planilla.${P.ultima ? " Último envío: " + esc(P.ultima.replace("T", " ")) : ""}`}</span>
+    <div class="${UI.admin && planillaUrl ? "grid2" : ""}" style="display:grid"><button class="btn" data-act="sync">Enviar ahora</button>${UI.admin && planillaUrl ? `<a class="btn primary" href="${esc(planillaUrl)}" target="_blank" rel="noopener">Abrir planilla</a>` : ""}</div></div>`;
   const conLink = EN_APK || Store.mode === "local";
   const srvCard = !conLink && !(Store.mode === "pc" && (P.codigoMal || !codigoAcceso())) ? "" : `<div class="panel" style="padding:16px;display:grid;gap:10px">
-    <div class="spread"><h3>Conexión con el panel</h3>${P.codigoMal ? `<span class="pill bad">Código incorrecto</span>` : ""}</div>
+    <div class="spread"><h3>Conexión con la planilla</h3>${P.codigoMal ? `<span class="pill bad">Código incorrecto</span>` : ""}</div>
     <span class="small muted">${conLink ? "Pega el link para los celulares que te dio el administrador. Funciona con cualquier conexión a internet." : `Escribe el código de acceso que aparece en ${donde}.`}</span>
     ${conLink ? `<label class="field"><span>Link</span><input id="srv-url" inputmode="url" autocapitalize="none" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec?c=…" value="${esc(sget("bf_server") || SERVIDOR_FIJO)}"></label>` : ""}
     <label class="field"><span>Código de acceso</span><input id="srv-codigo" autocapitalize="characters" autocomplete="off" placeholder="Ej. K7PQ3M" value="${esc(codigoAcceso())}"></label>
@@ -1097,7 +1097,7 @@ function vChofer() {
       <h2>${e.tipo === "semanal" ? "Auditoría semanal enviada" : "Auditoría mensual enviada"}</h2>
       <div class="row" style="justify-content:center">${e.fallas ? `<span class="pill bad">${pl(e.fallas, "falla")} reportada${e.fallas === 1 ? "" : "s"}</span>` : ""}${e.mants ? `<span class="pill info">${pl(e.mants, "mantención")}</span>` : ""}${e.fotos ? `<span class="pill">${pl(e.fotos, "foto")}</span>` : ""}</div>
       <div class="row" style="justify-content:center">${plate(c.patente, true)}</div>
-      <p class="muted" style="margin:0;max-width:34ch">${Store.mode === "pc" ? "Llega al panel. Si no hay señal, queda guardada en el teléfono y se envía sola." : "Quedó guardada en este teléfono."}</p>
+      <p class="muted" style="margin:0;max-width:34ch">${Store.mode === "pc" ? "Llega a la planilla. Si no hay señal, queda guardada en el teléfono y se envía sola." : "Quedó guardada en este teléfono."}</p>
       <button class="btn primary block" data-act="chofer-otra" style="min-height:52px">Auditar otro camión</button>
     </div>`;
   }
@@ -1258,8 +1258,8 @@ function vPlanilla() {
   return `<section><h1>Ajustes</h1></section>${srvCard}${pcPanel}${adminCard}
   <section><h2>Dónde se guardan los datos</h2>
     <p class="muted" style="margin:0">${Store.mode === "pc"
-      ? "Los registros llegan al panel web desde cualquier celular y cualquier lugar con internet. Si no hay señal, quedan en este teléfono y se envían solos al volver la conexión."
-      : "Los registros se guardan solo en este teléfono. Conecta la app al panel para que lleguen a la oficina."}</p>
+      ? "Los registros llegan a la planilla desde cualquier celular y cualquier lugar con internet. Si no hay señal, quedan en este teléfono y se envían solos al volver la conexión."
+      : "Los registros se guardan solo en este teléfono. Conecta la app a la planilla para que lleguen a la oficina."}</p>
   </section>
   <section><h2>Respaldo</h2>
     <div class="${UI.admin ? "grid2" : ""}" style="display:grid"><button class="btn" data-act="respaldo">Descargar respaldo</button>${UI.admin ? `<label class="btn" for="imp-json">Restaurar respaldo</label>` : ""}</div>
@@ -1381,7 +1381,7 @@ document.addEventListener("click", async e => {
     case "admin-salir": salirAdmin(); break;
     case "conectar": Store.conectar($("#srv-url").value, $("#srv-codigo").value); break;
     case "codigo": Store.guardarCodigo($("#srv-codigo").value); break;
-    case "sync": await Store.sync(); toast(Store.pc.conectado ? "Datos al día" : "No se pudo conectar con el panel"); break;
+    case "sync": await Store.sync(); toast(Store.pc.conectado ? "Datos al día" : "No se pudo conectar con la planilla"); break;
     case "respaldo": guardarArchivo(`Bitacora_Flota_respaldo_${hoy()}.json`, new Blob([JSON.stringify({ app: "bitacora-flota", version: 1, exportado: new Date().toISOString(), camiones: Store.camiones, registros: Store.registros }, null, 1)], { type: "application/json" })); break;
   }
 });
