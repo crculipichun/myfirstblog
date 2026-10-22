@@ -1,6 +1,7 @@
 const CORREOS = "cculipichun@dimerltda.cl, earaya@dimerltda.cl";
 
 const URL_WEB = "";
+const CODIGO_ACCESO = "";
 const _q = [164, 52, 41, 18, 27, 6, 23, 125, 55, 37, 32, 46, 8, 9, 1, 86, 62, 241, 231, 251, 233, 201, 196, 198, 192, 210, 237, 234, 133, 183, 187, 137, 158, 212, 151, 109, 122, 48, 115, 123, 87, 73, 80, 82, 46, 59, 111, 36, 56, 23, 14, 0, 15, 225, 227, 225, 230, 178];
 
 const ARCHIVO_DATOS = "Flota DIMER - datos (no borrar).json";
@@ -213,6 +214,7 @@ function importarHistorial(datos) {
 
 function config() {
   const p = PropertiesService.getScriptProperties();
+  if (CODIGO_ACCESO && p.getProperty("CODIGO") !== CODIGO_ACCESO) p.setProperty("CODIGO", CODIGO_ACCESO);
   if (!p.getProperty("CODIGO")) {
     const letras = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let c = ""; for (let i = 0; i < 6; i++) c += letras.charAt(Math.floor(Math.random() * letras.length));
